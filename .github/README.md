@@ -1,0 +1,1 @@
+Suggested Git branches: `feature/binomial-nadula`, `feature/factorization-bopage`, `feature/equations-nimsara`, `feature/algebraic-fractions-fernando`, `feature/indices-logs-sadeepa`, and `feature/frontend-nadula`. Submit pull requests to `main`. Do not commit secrets or live student information.
