@@ -1,4 +1,4 @@
-"""Interface specification. Other team members can implement TopicModule."""
+#Rules that all five members must followRules that all five members must follow
 from typing import Protocol
 from app.contracts import InternalQuestion
 

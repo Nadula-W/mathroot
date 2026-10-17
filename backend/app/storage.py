@@ -34,6 +34,7 @@ def initialize():
         conn.execute('''CREATE TABLE IF NOT EXISTS questions (
             id TEXT PRIMARY KEY, class_id TEXT NOT NULL, topic_id TEXT NOT NULL,
             difficulty TEXT NOT NULL, data TEXT NOT NULL)''')
+        
         conn.execute('''CREATE TABLE IF NOT EXISTS answers (
             id INTEGER PRIMARY KEY AUTOINCREMENT, question_id TEXT NOT NULL,
             class_id TEXT NOT NULL, student_id TEXT NOT NULL,

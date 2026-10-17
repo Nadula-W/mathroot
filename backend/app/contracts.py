@@ -5,14 +5,14 @@ from pydantic import BaseModel, Field
 
 Difficulty = Literal['easy', 'medium', 'hard']
 
-
+#Defining an answer option
 @dataclass(frozen=True)
 class InternalOption:
     id: str
     text: str
     misconception: str | None = None
 
-
+#Defining a complete question
 @dataclass(frozen=True)
 class InternalQuestion:
     id: str

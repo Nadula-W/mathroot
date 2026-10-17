@@ -1,4 +1,3 @@
-"""MathRoot first runnable API. Local demo only: NO authentication yet."""
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query
 from sqlite3 import IntegrityError
