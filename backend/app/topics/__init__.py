@@ -1,8 +1,7 @@
 """Each teammate adds a topic module here without changing API routes."""
-from app.topics.binomial import BinomialTopic
-
+from app.topics.llm_binomial import LLMBinomialTopic
 TOPICS = {
-    'binomial': BinomialTopic(),
+      "binomial": LLMBinomialTopic(),
 }
 
 PLANNED_TOPICS = [

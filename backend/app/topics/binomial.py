@@ -87,8 +87,7 @@ class BinomialTopic:
             # _as_text(3, 12) formats these values as "3x + 12" instead of "3*x + 12".
 
             text=_as_text(int(expr.coeff(x)), int(expr.subs(x, 0))),
-                            text=_as_text(int(expr.coeff(x)),int(expr.subs(x, 0))), 
-                            misconception=label)
+            misconception=label)
             for option_id, expr, label in identified
         ]
 

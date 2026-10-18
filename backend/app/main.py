@@ -1,8 +1,9 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query
 from sqlite3 import IntegrityError
+from app.topics.llm_binomial import llm_status
 
-from app import storage
+from app import storage, assessments
 from app.contracts import (
     GenerateRequest, AnswerRequest, PublicQuestion, PublicOption,
     AnswerResult, NextQuestionRequest,
@@ -13,16 +14,20 @@ from app.topics import TOPICS, PLANNED_TOPICS
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     storage.initialize()
+    assessments.initialize()
     yield
 
 
 app = FastAPI(title='MathRoot AI API', version='0.1.0', lifespan=lifespan)
-
+app.include_router(assessments.router)
 
 @app.get('/health')
 def health():
     return {'status': 'ok', 'version': '0.1.0'}
 
+@app.get("/api/ai/status")
+def ai_status():
+    return llm_status()
 
 @app.get('/api/topics')
 def topics():
