@@ -8,7 +8,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from app.contracts import InternalQuestion
-from app.topics.llm_binomial import OLLAMA_URL, selected_model
+from app.topics.development.binomial.generator import OLLAMA_URL, selected_model
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -113,7 +113,11 @@ def verify_answer(question: InternalQuestion, option_id: str, topic, provider: F
         "approved_explanations": explanations, "approved_guidance": tips,
     }
     try:
-        analysis = Analysis.model_validate((provider or OllamaFeedbackProvider()).analyze(context))
+        # Optional topic-owned provider; existing topics keep the default adapter.
+        if provider is None:
+            factory = getattr(topic, "answer_feedback_provider", None)
+            provider = factory() if factory else OllamaFeedbackProvider()
+        analysis = Analysis.model_validate(provider.analyze(context))
         if analysis.proposed_correct != correct:
             raise ValueError("grade_disagreement")
         if analysis.confidence < setting("MATHROOT_ANSWER_MIN_CONFIDENCE", 0.8, 0.5, 1):

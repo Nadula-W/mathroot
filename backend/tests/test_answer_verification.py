@@ -81,6 +81,26 @@ def test_manual_does_not_call_ai(monkeypatch, topic):
     assert provider.calls == 0
 
 
+def test_topic_can_choose_its_own_provider(monkeypatch, topic):
+    monkeypatch.setenv('MATHROOT_ANSWER_VERIFIER', 'auto')
+    provider = GroundedProvider()
+    monkeypatch.setattr(topic, 'answer_feedback_provider', lambda: provider, raising=False)
+    q = topic.generate_question('easy')
+    assert verify_answer(q, q.correct_option_id, topic)['verification_method'] == 'ai_assisted'
+    assert provider.calls == 1
+
+
+def test_topic_provider_configuration_failure_uses_manual(monkeypatch, topic):
+    monkeypatch.setenv('MATHROOT_ANSWER_VERIFIER', 'auto')
+    def unavailable():
+        raise ValueError('Missing topic provider configuration')
+    monkeypatch.setattr(topic, 'answer_feedback_provider', unavailable, raising=False)
+    q = topic.generate_question('easy')
+    result = verify_answer(q, q.correct_option_id, topic)
+    assert result['correct']
+    assert result['verification_method'] == 'manual_fallback'
+
+
 def test_unknown_distractor_never_gets_correct_feedback(monkeypatch, topic):
     monkeypatch.setenv('MATHROOT_ANSWER_VERIFIER', 'manual')
     q = topic.generate_question('easy')

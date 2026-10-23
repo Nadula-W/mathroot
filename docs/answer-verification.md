@@ -1,4 +1,4 @@
-﻿# Hybrid answer verification
+# Hybrid answer verification
 
 ## Behavior and contracts
 
@@ -66,6 +66,6 @@ npm run build
 - Real local Ollama exceeded the 4-second timeout and a subsequent 15-second check. Both returned the correct deterministic grade and fallback feedback. Successful live AI-assisted inference was not confirmed in this session; successful provider responses were exercised with deterministic HTTP/provider mocks.
 - Separate-browser UI acceptance was not automated. The pre-existing Starlette/httpx deprecation warning remains non-failing.
 
-Changed for this feature: `backend/app/answer_verification.py`, `backend/app/safe_symbolic.py`, `backend/app/assessments.py`, `backend/app/topics/binomial.py`, `backend/tests/test_answer_verification.py`, `backend/tests/conftest.py`, `backend/scripts/verify_assessments.py`, `frontend/app/student/test/[testId]/page.tsx`, `frontend/app/components/AssessmentReview.tsx`, the additive migration, `docs/TOPIC_CONTRACT.md`, and this document. Earlier working-tree changes were preserved.
+Changed for this feature: `backend/app/answer_verification.py`, `backend/app/safe_symbolic.py`, `backend/app/assessments.py`, `backend/app/topics/development/binomial/manual.py`, `backend/tests/test_answer_verification.py`, `backend/tests/conftest.py`, `backend/scripts/verify_assessments.py`, `frontend/app/student/test/[testId]/page.tsx`, `frontend/app/components/AssessmentReview.tsx`, the additive migration, `docs/TOPIC_CONTRACT.md`, and this document. Earlier working-tree changes were preserved.
 
 Post-migration security advisor review found the existing backend-only tables with RLS and no policies (intentional: browser grants are revoked), plus existing handle_new_user execution-privilege warnings and disabled leaked-password protection. This feature does not modify signup triggers or Auth settings. References: [anonymous function execution](https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable), [authenticated function execution](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable), and [password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).

@@ -6,7 +6,7 @@ LLMBinomialTopic. The old SQLite practice demo is deliberately excluded.
 from fastapi import FastAPI
 from app.assessments import router as assessments_router
 from app.topics import PLANNED_TOPICS
-from app.topics.llm_binomial import llm_status
+from app.topics.development.binomial.generator import llm_status
 
 app = FastAPI(title="MathRoot AI", version="0.5.0")
 app.include_router(assessments_router)

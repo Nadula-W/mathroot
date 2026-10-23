@@ -1,5 +1,5 @@
 """Each teammate adds a topic module here without changing API routes."""
-from app.topics.llm_binomial import LLMBinomialTopic
+from app.topics.development.binomial.generator import LLMBinomialTopic
 TOPICS = {
       "binomial": LLMBinomialTopic(),
 }

@@ -4,7 +4,7 @@ The following module ownership has already been agreed:
 
 | Owner | Module | Topic ID |
 |---|---|---|
-| Nadula | `app/topics/binomial.py` | `binomial` |
+| Nadula | `app/topics/development/binomial/manual.py` | `binomial` |
 | Bopage | `app/topics/factorization.py` | `factorization` |
 | Nimsara | `app/topics/equations.py` | `equations` |
 | Fernando | `app/topics/algebraic_fractions.py` | `algebraic_fractions` |
