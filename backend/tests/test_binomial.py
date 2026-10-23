@@ -1,7 +1,7 @@
-﻿import random
+import random
 from dataclasses import asdict
 from sympy import Symbol, simplify, sympify
-from app.topics.binomial import BinomialTopic
+from app.topics.development.binomial.manual import BinomialTopic
 from app.assessments import public_detail
 
 x = Symbol('x')

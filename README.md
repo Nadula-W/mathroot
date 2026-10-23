@@ -49,10 +49,9 @@ mathroot-ai/
 │   ├── app/
 │   │   ├── main.py               # Shared FastAPI routes
 │   │   ├── contracts.py          # Common request/response models
-│   │   ├── storage.py            # SQLite for local prototype
 │   │   └── topics/
 │   │       ├── base.py           # Topic interface
-│   │       └── binomial.py       # Nadula's first module
+│   │       └── development/      # Member topic folders (Binomial is ready)
 │   ├── tests/
 │   └── requirements.txt
 ├── frontend/                    # Nadula's future Next.js app

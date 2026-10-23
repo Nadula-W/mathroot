@@ -5,10 +5,10 @@ The following module ownership has already been agreed:
 | Owner | Module | Topic ID |
 |---|---|---|
 | Nadula | `app/topics/development/binomial/manual.py` | `binomial` |
-| Bopage | `app/topics/factorization.py` | `factorization` |
-| Nimsara | `app/topics/equations.py` | `equations` |
-| Fernando | `app/topics/algebraic_fractions.py` | `algebraic_fractions` |
-| Sadeepa | `app/topics/indices_logs.py` | `indices_logs` |
+| Bopage | `app/topics/development/factorization/generator.py` | `factorization` |
+| Nimsara | `app/topics/development/equations/generator.py` | `equations` |
+| Fernando | `app/topics/development/algebraic_fractions/generator.py` | `algebraic_fractions` |
+| Sadeepa | `app/topics/development/indices_logs/generator.py` | `indices_logs` |
 
 Each topic implements the `TopicModule` interface in `app/topics/base.py`.
 

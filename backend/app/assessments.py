@@ -18,7 +18,7 @@ from app.supabase_auth import (
 )
 from app.answer_verification import verify_answer
 from app.topics import TOPICS
-from app.topics.binomial import BinomialTopic
+from app.topics.development.binomial.manual import BinomialTopic
 
 logger = logging.getLogger("uvicorn.error")
 router = APIRouter(tags=["Supabase assessments"])

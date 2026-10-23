@@ -1,6 +1,6 @@
-﻿"""Authenticated assessment workflow, using disposable in-memory records."""
+"""Authenticated assessment workflow, using disposable in-memory records."""
 from dataclasses import asdict
-from app.topics.binomial import BinomialTopic
+from app.topics.development.binomial.manual import BinomialTopic
 from app.main import app
 from app.supabase_auth import current_user
 

@@ -5,7 +5,7 @@ import httpx
 import pytest
 
 from app.answer_verification import Analysis, OllamaFeedbackProvider, verify_answer
-from app.topics.binomial import BinomialTopic
+from app.topics.development.binomial.manual import BinomialTopic
 from app.safe_symbolic import equivalent, parse_math
 
 

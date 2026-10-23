@@ -6,7 +6,7 @@ This folder contains the existing working implementation, moved without changing
 - `generator.py`: existing Ollama generation, configuration and automatic manual fallback (`LLMBinomialTopic`).
 - Answer verification continues to use `app/answer_verification.py`; it is shared rather than duplicated here.
 
-The topic remains registered and ready. Existing `from app.topics.binomial import BinomialTopic` imports still work. `app/topics/llm_binomial.py` is a compatibility re-export for older imports.
+The topic remains registered and ready. Import the manual topic with `from app.topics.development.binomial.manual import BinomialTopic` and the AI generator with `from app.topics.development.binomial.generator import LLMBinomialTopic`.
 
 Existing backend environment settings are unchanged: `MATHROOT_GENERATOR`, `MATHROOT_OLLAMA_MODEL`, and the separate `MATHROOT_ANSWER_*` settings. Store secrets only in ignored backend environment files.
 

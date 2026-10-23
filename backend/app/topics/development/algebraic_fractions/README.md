@@ -1,6 +1,6 @@
 # Fernando ? Algebraic Fractions
 
-This is an unfinished workspace for topic ID `algebraic_fractions`. It is not registered or ready. Existing placeholder `app/topics/algebraic_fractions.py` is unchanged. No completed Mathematics implementation is provided.
+This is an unfinished workspace for topic ID `algebraic_fractions`. It is not registered or ready. No completed Mathematics implementation is provided.
 
 1. **Question generation:** implement the provider call and JSON conversion in `ai.generate_question`; `generator.generate_question` validates AI questions and automatically tries the manual generator on AI errors. Keep the original `InternalQuestion` / `InternalOption` contract in `app/contracts.py`.
 2. **Answer analysis:** implement `ai.analyze_answer` and use `verifier.verify_answer` for independent checks. It delegates to the existing shared verifier; do not duplicate grading or fallback. Stable misconception codes belong in `AlgebraicFractionsTopic.misconception_definitions`. Attach codes only to justified distractors.
