@@ -29,6 +29,15 @@ def _as_text(coefficient: int, constant: int) -> str:
 
 class BinomialTopic:
     topic_id = 'binomial'
+    misconception_definitions = {
+        'DISTRIBUTION_CONSTANT': 'Only the variable term was multiplied.',
+        'DISTRIBUTION_VARIABLE': 'Only the constant term was multiplied.',
+        'SIGN_ERROR': 'A product has an incorrect sign.',
+        'COEFFICIENT_ERROR': 'Algebraic coefficients were multiplied incorrectly.',
+        'UNLIKE_TERMS': 'Unlike terms were combined.',
+        'ARITHMETIC_ERROR': 'A numerical product or sum was calculated incorrectly.',
+        'VARIABLE_CONSTANT_CONFUSION': 'Coefficients, variables and constants were confused.',
+    }
     title = 'Grade 10 — Binomial Expressions'
 
 #init runs when an object is created
@@ -123,8 +132,30 @@ class BinomialTopic:
 
     def teaching_recommendation(self, misconception: str) -> str:
         recommendations = {
+            'COEFFICIENT_ERROR': 'Separate the numerical coefficients from the variable, then multiply the coefficients.',
+            'UNLIKE_TERMS': 'Sort terms by variable and power; combine only matching terms.',
+            'ARITHMETIC_ERROR': 'Recalculate each numerical operation before simplifying the expression.',
+            'VARIABLE_CONSTANT_CONFUSION': 'Label the coefficient, variable and constant in several example expressions.',
             'DISTRIBUTION_CONSTANT': 'Demonstrate how the outside coefficient multiplies BOTH bracket terms, then assign two expansion examples.',
             'DISTRIBUTION_VARIABLE': 'Review multiplication of coefficients and variables before expanding brackets.',
             'SIGN_ERROR': 'Revisit signed-number multiplication, then practise bracket expansion with negative constants.',
         }
         return recommendations.get(misconception, 'Review expansion of brackets with another worked example.')
+
+    def verification_feedback(self, question: InternalQuestion, misconception: str | None, correct: bool):
+        """Optional topic extension: trusted conceptual variants for grounded AI selection.
+
+        Distractors currently support three diagnoses. Other mistakes must remain
+        uncertain until a future question provides evidence for their stable code.
+        """
+        concepts = {
+            'DISTRIBUTION_CONSTANT': 'Possible misconception: multiplying only the variable term. The constant must also be multiplied by the outside coefficient.',
+            'DISTRIBUTION_VARIABLE': 'Possible misconception: multiplying only the constant term. Multiply the variable coefficient by the outside coefficient too.',
+            'SIGN_ERROR': 'Possible misconception: a sign error when multiplying signed numbers. Check the signs before simplifying each product.',
+        }
+        text = 'Correct answer. Both terms have been multiplied consistently.' if correct else concepts.get(
+            misconception, 'Incorrect answer. The selection alone does not establish a particular misconception.'
+        )
+        return [text + ' ' + question.explanation], [
+            'First multiply the variable term, then the constant term, and finally check the signs. Keep unlike terms separate.'
+        ]

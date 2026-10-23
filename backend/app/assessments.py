@@ -16,11 +16,135 @@ from app.contracts import Difficulty, InternalOption, InternalQuestion
 from app.supabase_auth import (
     admin_client, current_user, require_student, require_teacher,
 )
+from app.answer_verification import verify_answer
 from app.topics import TOPICS
 from app.topics.binomial import BinomialTopic
 
 logger = logging.getLogger("uvicorn.error")
 router = APIRouter(tags=["Supabase assessments"])
+
+
+def answer_rows(table="mathroot_answers", **filters):
+    """Read all matching rows, including classes with more than one API page."""
+    rows = []
+    while True:
+        query = admin_client().table(table).select("*")
+        for key, value in filters.items():
+            query = query.eq(key, value)
+        keys = {
+            "mathroot_answers": ("test_id", "question_id", "student_id"),
+            "mathroot_class_members": ("class_id", "student_id"),
+        }.get(table, ("id",))
+        for key in keys:
+            query = query.order(key)
+        page = query.range(len(rows), len(rows) + 499).execute().data or []
+        rows.extend(page)
+        if len(page) < 500:
+            return rows
+
+
+def progress(test, rows):
+    """Derive status and scores solely from immutable persisted answers."""
+    valid = {q["id"] for q in test["questions"]}
+    rows = [r for r in rows if r["question_id"] in valid]
+    total = len(valid)
+    correct = sum(bool(r["correct"]) for r in rows)
+    completed = bool(total) and len(rows) == total
+    return {"answered": len(rows), "correct": correct, "incorrect": len(rows) - correct,
+            "percentage": round(100 * correct / total, 1) if total else 0,
+            "status": "Completed" if completed else "In Progress" if rows else "Not Started",
+            "completed_at": max((r.get("created_at", "") for r in rows), default=None) if completed else None}
+
+
+def review(test, student_id):
+    rows = answer_rows(test_id=test["id"], student_id=student_id)
+    history = answer_rows(class_id=test["class_id"], student_id=student_id)
+    answers = []
+    positions = {q["id"]: i for i, q in enumerate(test["questions"])}
+    for row in sorted(rows, key=lambda r: positions.get(r["question_id"], len(positions))):
+        data = next((q for q in test["questions"] if q["id"] == row["question_id"]), None)
+        if not data:
+            continue
+        question = InternalQuestion(**{**data, "options": [InternalOption(**o) for o in data["options"]]})
+        evidence = sum(r["topic_id"] == row["topic_id"] and r["misconception"] == row["misconception"] for r in history)
+        levels = ["easy", "medium", "hard"]
+        level = levels.index(data["difficulty"])
+        detail = {"question_id": data["id"], "statement": data["statement"],
+                        "option_id": row["option_id"], "correct": row["correct"],
+                        "selected_option": next(o["text"] for o in data["options"] if o["id"] == row["option_id"]),
+                        "correct_answer": next(o["text"] for o in data["options"] if o["id"] == data["correct_option_id"]),
+                        "explanation": data["explanation"], "suspected_misconception": row["misconception"],
+                        "diagnosis_status": "none" if row["correct"] else "repeated_signal" if evidence >= 2 else "suspected",
+                        "recommended_next_difficulty": levels[min(2, level + 1) if row["correct"] else max(0, level - 1)],
+                        "feedback": (TOPICS[data["topic_id"]].feedback(question, row["misconception"])
+                                     if row["correct"] or row["misconception"] else "Incorrect answer. " + question.explanation)}
+        # Old rows have no snapshot: retain deterministic review without invoking AI.
+        snapshot = row.get("verification")
+        if snapshot:
+            detail.update({k: snapshot[k] for k in (
+                "feedback", "explanation", "corrective_guidance", "teaching_recommendation",
+                "verification_method", "confidence",
+            ) if k in snapshot})
+        else:
+            detail.update(verification_method="manual_fallback", confidence=None,
+                          corrective_guidance=TOPICS[data["topic_id"]].teaching_recommendation(row["misconception"]) if row["misconception"] else "Review the worked solution.")
+        if not row["correct"] and not row["misconception"]:
+            detail["diagnosis_status"] = "unknown"
+        answers.append(detail)
+    return {**public_detail(test), **progress(test, rows), "answers": answers}
+
+
+@router.get("/api/student/classes")
+def student_classes(student: Annotated[dict, Depends(require_student)]):
+    result = []
+    for member in answer_rows("mathroot_class_members", student_id=student["id"]):
+        group = first("mathroot_classes", "id", member["class_id"])
+        if group:
+            teacher = first("profiles", "id", group["teacher_id"], "full_name")
+            result.append({"class_id": group["id"], "teacher_name": (teacher or {}).get("full_name")})
+    return result
+
+
+@router.get("/api/student/results")
+def student_results(student: Annotated[dict, Depends(require_student)]):
+    result = []
+    for group in student_classes(student):
+        for test in answer_rows("mathroot_tests", class_id=group["class_id"]):
+            state = progress(test, answer_rows(test_id=test["id"], student_id=student["id"]))
+            if state["status"] == "Completed":
+                result.append({**public_detail(test), **state})
+    return sorted(result, key=lambda r: r["completed_at"] or "", reverse=True)
+
+
+@router.get("/api/teacher/tests")
+def managed_tests(teacher: Annotated[dict, Depends(require_teacher)]):
+    return [{**public_detail(t), "participant_count": len({a["student_id"] for a in answer_rows(test_id=t["id"])})}
+            for t in sorted(answer_rows("mathroot_tests", teacher_id=teacher["id"]), key=lambda t: t.get("created_at", ""), reverse=True)]
+
+
+@router.delete("/api/tests/{test_id}")
+def delete_test(test_id: str, teacher: Annotated[dict, Depends(require_teacher)]):
+    test = get_test_record(test_id)
+    owned_class(test["class_id"], teacher["id"])
+    if test["teacher_id"] != teacher["id"]:
+        raise HTTPException(403, "You do not own this test.")
+    # Existing FK ON DELETE CASCADE removes answers in the same transaction.
+    admin_client().table("mathroot_tests").delete().eq("id", test_id).eq("teacher_id", teacher["id"]).execute()
+    return {"status": "deleted"}
+
+
+@router.get("/api/tests/{test_id}/progress")
+def saved_progress(test_id: str, student: Annotated[dict, Depends(require_student)]):
+    test = get_test_record(test_id)
+    class_member(test["class_id"], student)
+    return review(test, student["id"])
+
+
+@router.get("/api/tests/{test_id}/students/{student_id}")
+def student_review(test_id: str, student_id: str, teacher: Annotated[dict, Depends(require_teacher)]):
+    test = get_test_record(test_id)
+    owned_test(test, teacher["id"])
+    return review(test, student_id)
 
 
 class CreateTest(BaseModel):
@@ -33,7 +157,7 @@ class CreateTest(BaseModel):
 
 class JoinClass(BaseModel):
     class_id: str = Field(min_length=1, max_length=64)
-    join_code: str = Field(min_length=6, max_length=128)
+    join_code: str = Field(min_length=1, max_length=128)
 
 
 class SubmitTestAnswer(BaseModel):
@@ -54,6 +178,12 @@ def owned_class(class_id: str, teacher_id: str) -> dict:
     if not group or group["teacher_id"] != teacher_id:
         raise HTTPException(403, "This class is not owned by your teacher account.")
     return group
+
+
+def owned_test(test: dict, teacher_id: str) -> None:
+    owned_class(test["class_id"], teacher_id)
+    if test["teacher_id"] != teacher_id:
+        raise HTTPException(403, "You do not own this test.")
 
 
 def class_member(class_id: str, user: dict) -> None:
@@ -87,6 +217,8 @@ def public_detail(test: dict, include_questions: bool = False) -> dict:
         "class_id": test["class_id"],
         "question_count": len(items),
         "topics": list(dict.fromkeys(item["topic_id"] for item in items)),
+        "difficulty": ", ".join(dict.fromkeys(item["difficulty"] for item in items)),
+        "created_at": test.get("created_at"),
     }
     if include_questions:
         # Never expose correct_option_id, explanations, or misconception labels.
@@ -146,9 +278,15 @@ def teacher_classes(teacher: Annotated[dict, Depends(require_teacher)]):
 
 @router.post("/api/classes/join")
 def join_class(req: JoinClass, student: Annotated[dict, Depends(require_student)]):
+    req.class_id = req.class_id.strip()
     group = first("mathroot_classes", "id", req.class_id)
-    if not group or not secrets.compare_digest(group["join_code"], req.join_code):
-        raise HTTPException(403, "Invalid class ID or join code.")
+    if not group:
+        raise HTTPException(404, "Class ID does not exist.")
+    existing = answer_rows("mathroot_class_members", class_id=req.class_id, student_id=student["id"])
+    if existing:
+        return {"status": "already_enrolled", "class_id": req.class_id}
+    if not secrets.compare_digest(group["join_code"], req.join_code.strip()):
+        raise HTTPException(403, "Incorrect class join code.")
     admin_client().table("mathroot_class_members").upsert(
         {"class_id": req.class_id, "student_id": student["id"]},
         on_conflict="class_id,student_id",
@@ -158,6 +296,10 @@ def join_class(req: JoinClass, student: Annotated[dict, Depends(require_student)
 
 @router.post("/api/tests")
 def create_test(req: CreateTest, teacher: Annotated[dict, Depends(require_teacher)]):
+    req.title = req.title.strip()
+    req.class_id = req.class_id.strip()
+    if len(req.title) < 3:
+        raise HTTPException(422, "Test title must contain at least three characters.")
     if len(set(req.topic_ids)) != len(req.topic_ids):
         raise HTTPException(422, "Select each topic only once.")
     missing = [topic_id for topic_id in req.topic_ids if topic_id not in TOPICS]
@@ -171,14 +313,9 @@ def create_test(req: CreateTest, teacher: Annotated[dict, Depends(require_teache
     for topic_id in req.topic_ids:
         seen = set()
         manual = BinomialTopic() if topic_id == "binomial" else None
-        for index in range(req.questions_per_topic):
-            # Avoid multiplying model latency: first two per topic use Ollama,
-            # remaining questions use the rule-based generator when available.
-            generator = (
-                TOPICS[topic_id]
-                if manual is None or index < 2
-                else manual
-            )
+        for _ in range(req.questions_per_topic):
+            # The configured topic owns Ollama generation and its safe fallback.
+            generator = TOPICS[topic_id]
             question = generator.generate_question(req.difficulty)
             if question.source_expression in seen and manual is not None:
                 for _ in range(60):
@@ -214,11 +351,11 @@ def list_tests(
     class_member(class_id, user)
     rows = (
         admin_client().table("mathroot_tests")
-        .select("id,title,class_id,questions")
+        .select("id,title,class_id,questions,created_at")
         .eq("class_id", class_id)
         .order("created_at", desc=True).execute().data
     ) or []
-    return [public_detail(row) for row in rows]
+    return [{**public_detail(row), **progress(row, answer_rows("mathroot_answers", test_id=row["id"], student_id=user["id"]))} for row in rows]
 
 
 @router.get("/api/tests/{test_id}")
@@ -246,6 +383,9 @@ def submit_test_answer(
     )
     if option_data is None:
         raise HTTPException(422, "Unknown answer option.")
+    existing = answer_rows(test_id=test_id, question_id=req.question_id, student_id=student["id"])
+    if existing:
+        return next(a for a in review(test, student["id"])["answers"] if a["question_id"] == req.question_id)
 
     question = InternalQuestion(**{
         **data,
@@ -255,8 +395,9 @@ def submit_test_answer(
     if not topic:
         raise HTTPException(422, "Topic module is unavailable.")
 
-    correct = req.option_id == question.correct_option_id
-    misconception = None if correct else option_data.get("misconception")
+    verification = verify_answer(question, req.option_id, topic)
+    correct = verification["correct"]
+    misconception = verification["suspected_misconception"]
     try:
         admin_client().table("mathroot_answers").insert({
             "test_id": test_id,
@@ -267,6 +408,7 @@ def submit_test_answer(
             "option_id": req.option_id,
             "correct": correct,
             "misconception": misconception,
+            "verification": verification,
         }).execute()
     except Exception as exc:
         existing = (
@@ -276,52 +418,18 @@ def submit_test_answer(
             .eq("student_id", student["id"]).limit(1).execute().data
         ) or []
         if existing:
-            raise HTTPException(409, "You already answered this question.") from exc
+            return next(a for a in review(test, student["id"])["answers"] if a["question_id"] == req.question_id)
         logger.exception("Failed saving MathRoot answer")
         raise HTTPException(503, "Could not save answer to Supabase.") from exc
 
-    diagnosis = "none"
-    if not correct:
-        matches = (
-            admin_client().table("mathroot_answers")
-            .select("question_id")
-            .eq("class_id", test["class_id"])
-            .eq("student_id", student["id"])
-            .eq("topic_id", question.topic_id)
-            .eq("misconception", misconception)
-            .execute().data
-        ) or []
-        diagnosis = "repeated_signal" if len(matches) >= 2 else "suspected"
-
-    difficulties = ["easy", "medium", "hard"]
-    current = difficulties.index(question.difficulty)
-    next_level = (
-        difficulties[min(2, current + 1)] if correct
-        else difficulties[max(0, current - 1)]
-    )
-    right_option = next(
-        o for o in question.options if o.id == question.correct_option_id
-    )
-    return {
-        "correct": correct,
-        "selected_option": option_data["text"],
-        "correct_answer": right_option.text,
-        "suspected_misconception": misconception,
-        "diagnosis_status": diagnosis,
-        "feedback": topic.feedback(question, misconception),
-        "recommended_next_difficulty": next_level,
-    }
+    return next(a for a in review(test, student["id"])["answers"] if a["question_id"] == req.question_id)
 
 
 @router.get("/api/tests/{test_id}/results")
 def test_results(test_id: str, teacher: Annotated[dict, Depends(require_teacher)]):
     test = get_test_record(test_id)
-    owned_class(test["class_id"], teacher["id"])
-    rows = (
-        admin_client().table("mathroot_answers")
-        .select("student_id,topic_id,correct,misconception")
-        .eq("test_id", test_id).execute().data
-    ) or []
+    owned_test(test, teacher["id"])
+    rows = answer_rows(test_id=test_id)
 
     topics, students = {}, {}
     for row in rows:
@@ -353,13 +461,22 @@ def test_results(test_id: str, teacher: Annotated[dict, Depends(require_teacher)
             )
         ]
     for s in students.values():
+        profile = first("profiles", "id", s["student_id"], "full_name")
+        s["full_name"] = (profile or {}).get("full_name") or "Student"
+        s.update(progress(test, answer_rows(test_id=test_id, student_id=s["student_id"])))
         s["misconceptions"] = [
             {"code": code, "count": count}
             for code, count in s["misconceptions"].items()
         ]
 
+    scores = [s["percentage"] for s in students.values() if s["status"] == "Completed"]
     return {
         **public_detail(test),
+        "enrolled_count": len(answer_rows("mathroot_class_members", class_id=test["class_id"])),
+        "completed_count": len(scores),
+        "average_score": round(sum(scores) / len(scores), 1) if scores else None,
+        "highest_score": max(scores) if scores else None,
+        "lowest_score": min(scores) if scores else None,
         "student_count": len(students),
         "answers_submitted": len(rows),
         "topics_results": list(topics.values()),

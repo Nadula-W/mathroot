@@ -1,6 +1,6 @@
 
 "use client";
-
+import { backendApi } from "../../lib/backend-api";
 import { useEffect, useState } from "react";
 
 type Topic = {
@@ -18,58 +18,26 @@ type TestInfo = {
   topics: string[];
 };
 
-type Results = TestInfo & {
-  student_count: number;
-  answers_submitted: number;
-  topics_results: {
-    topic_id: string;
-    answers: number;
-    correct: number;
-    misconceptions: {
-      code: string;
-      count: number;
-      recommendation: string;
-    }[];
-  }[];
-  students: {
-    student_id: string;
-    answered: number;
-    correct: number;
-    misconceptions: { code: string; count: number }[];
-  }[];
-};
-
 async function jsonRequest<T>(
   url: string,
-  options?: RequestInit
+  options: RequestInit = {}
 ): Promise<T> {
-  const response = await fetch(url, {
-    cache: "no-store",
-    ...options,
-  });
+  const path = url.startsWith("/backend/")
+    ? url.slice("/backend".length)
+    : url;
 
-  const body = await response.json();
-
-  if (!response.ok) {
-    throw new Error(
-      typeof body.detail === "string"
-        ? body.detail
-        : `Request failed: ${response.status}`
-    );
-  }
-
-  return body as T;
+  return backendApi<T>(path, options);
 }
+
 
 export default function TestCreator() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [selected, setSelected] = useState<string[]>(["binomial"]);
-  const [classId, setClassId] = useState("demo-class");
+  const [classId, setClassId] = useState("");
   const [title, setTitle] = useState("O/L Mathematics Practice Test");
   const [count, setCount] = useState(3);
   const [difficulty, setDifficulty] = useState("easy");
-  const [tests, setTests] = useState<TestInfo[]>([]);
-  const [results, setResults] = useState<Results | null>(null);
+  const [classes, setClasses] = useState<{ class_id: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -80,6 +48,12 @@ export default function TestCreator() {
       .catch(() =>
         setError("Cannot load topics. Check backend port 8000.")
       );
+  }, []);
+
+  useEffect(() => {
+    const load = () => { backendApi<{ class_id: string }[]>("/api/classes").then(setClasses).catch(e => setError(e.message)); };
+    load(); window.addEventListener("assessments-changed", load);
+    return () => window.removeEventListener("assessments-changed", load);
   }, []);
 
   function toggle(topicId: string) {
@@ -99,7 +73,6 @@ export default function TestCreator() {
     setBusy(true);
     setError("");
     setMessage("");
-    setResults(null);
 
     try {
       const created = await jsonRequest<TestInfo>(
@@ -117,50 +90,10 @@ export default function TestCreator() {
         }
       );
 
-      setTests((previous) => [created, ...previous]);
       setMessage(`Test created: ${created.title}`);
+      window.dispatchEvent(new Event("assessments-changed"));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Creation failed.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function loadTests() {
-    if (!classId.trim()) {
-      setError("Enter a class ID.");
-      return;
-    }
-
-    setBusy(true);
-    setError("");
-
-    try {
-      const data = await jsonRequest<TestInfo[]>(
-        `/backend/api/tests?class_id=${encodeURIComponent(
-          classId.trim()
-        )}`
-      );
-
-      setTests(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Loading failed.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function loadResults(testId: string) {
-    setBusy(true);
-    setError("");
-
-    try {
-      const data = await jsonRequest<Results>(
-        `/backend/api/tests/${testId}/results`
-      );
-      setResults(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Loading failed.");
     } finally {
       setBusy(false);
     }
@@ -177,11 +110,7 @@ export default function TestCreator() {
       <div className="form-grid">
         <label className="field">
           <span>Class ID</span>
-          <input
-            value={classId}
-            maxLength={64}
-            onChange={(e) => setClassId(e.target.value)}
-          />
+          <select value={classId} onChange={e => setClassId(e.target.value)}><option value="">Select your class</option>{classes.map(c => <option key={c.class_id}>{c.class_id}</option>)}</select>
         </label>
 
         <label className="field">
@@ -245,7 +174,7 @@ export default function TestCreator() {
         className="button primary"
         onClick={createTest}
         disabled={
-          busy ||
+          busy || !classId ||
           selected.length === 0 ||
           !Number.isInteger(count) ||
           count < 1 ||
@@ -255,114 +184,6 @@ export default function TestCreator() {
         {busy ? "Working..." : "Generate Test"}
       </button>
 
-      <button
-        className="button ghost"
-        style={{ marginLeft: 12 }}
-        onClick={loadTests}
-        disabled={busy}
-      >
-        Load Class Tests
-      </button>
-
-      {tests.length > 0 && (
-        <div style={{ marginTop: 26 }}>
-          <h3>Created Tests</h3>
-
-          {tests.map((test) => {
-            const path = `/student/test/${test.test_id}`;
-            const link =
-              typeof window === "undefined"
-                ? ""
-                : `${window.location.origin}${path}`;
-
-            return (
-              <div className="test-entry" key={test.test_id}>
-                <div>
-                  <strong>{test.title}</strong>
-                  <p className="muted">
-                    {test.question_count} questions
-                    {" · "}
-                    {test.topics.join(", ")}
-                  </p>
-                </div>
-
-                <div className="test-buttons">
-                  <a href={path} target="_blank" rel="noreferrer">
-                    Student Link
-                  </a>
-
-                  <button
-                    onClick={() =>
-                      navigator.clipboard.writeText(link)
-                    }
-                  >
-                    Copy Link
-                  </button>
-
-                  <button
-                    onClick={() => loadResults(test.test_id)}
-                    disabled={busy}
-                  >
-                    Results
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {results && (
-        <div className="results-area">
-          <h3>Results — {results.title}</h3>
-          <p>
-            {results.student_count} students ·{" "}
-            {results.answers_submitted} submitted answers
-          </p>
-
-          <h3>Topic Feedback</h3>
-
-          {results.topics_results.map((topic) => (
-            <div className="test-entry" key={topic.topic_id}>
-              <div>
-                <strong>{topic.topic_id}</strong>
-                <p>
-                  {topic.correct}/{topic.answers} correct answers
-                </p>
-
-                {topic.misconceptions.map((m) => (
-                  <p className="muted" key={m.code}>
-                    {m.code}: {m.count} wrong-answer events.
-                    {" "}{m.recommendation}
-                  </p>
-                ))}
-              </div>
-            </div>
-          ))}
-
-          <h3>Individual Student Feedback</h3>
-
-          {results.students.map((s) => (
-            <p key={s.student_id}>
-              <strong>{s.student_id}:</strong>{" "}
-              {s.correct}/{s.answered} correct
-              {s.misconceptions.length > 0 && (
-                <>
-                  {" · Possible difficulties: "}
-                  {s.misconceptions
-                    .map((m) => `${m.code} (${m.count})`)
-                    .join(", ")}
-                </>
-              )}
-            </p>
-          ))}
-
-          <p className="helper">
-            Misconceptions are preliminary error signals,
-            not confirmed diagnoses.
-          </p>
-        </div>
-      )}
     </section>
   );
 }

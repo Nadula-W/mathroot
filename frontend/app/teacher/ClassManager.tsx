@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { backendApi } from "../../lib/backend-api";
 
 export default function ClassManager() {
@@ -7,6 +7,12 @@ export default function ClassManager() {
   const [joinCode, setJoinCode] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [classes, setClasses] = useState<{ class_id: string; join_code: string }[]>([]);
+  async function reload() {
+    try { setClasses(await backendApi<{ class_id: string; join_code: string }[]>("/api/classes")); }
+    catch (e) { setMessage(e instanceof Error ? e.message : "Could not load classes."); }
+  }
+  useEffect(() => { void reload(); }, []);
 
   async function createClass() {
     setBusy(true); setMessage("");
@@ -16,6 +22,8 @@ export default function ClassManager() {
         { method: "POST" },
       );
       setJoinCode(result.join_code);
+      await reload();
+      window.dispatchEvent(new Event("assessments-changed"));
       setMessage(`Class ${result.class_id} is ready. Share the join code with test students.`);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Class setup failed.");
@@ -33,5 +41,7 @@ export default function ClassManager() {
     </button>
     {joinCode && <p><strong>Student join code:</strong> <code>{joinCode}</code></p>}
     {message && <p role="status">{message}</p>}
+    <h3>My Classes</h3>
+    {classes.length === 0 ? <p>No classes loaded yet.</p> : classes.map(group => <div className="test-entry" key={group.class_id}><strong>{group.class_id}</strong><span>Join code: <code>{group.join_code}</code></span></div>)}
   </section>;
 }
