@@ -4,6 +4,14 @@ from app.contracts import InternalQuestion
 
 
 class TopicModule(Protocol):
+    """Required mathematics contract; bilingual presentation remains optional.
+
+    Completed topics may also expose presentation_text(field, text,
+    question=None, misconception=None) for reviewed Sinhala templates, and
+    translation_provider()/validate_translation(field, source, translated,
+    question=None) for optional AI translation. These are display hooks only;
+    the shared presentation service keeps canonical mathematics unchanged.
+    """
     topic_id: str
     title: str
 

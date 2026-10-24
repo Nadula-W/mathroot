@@ -17,6 +17,7 @@ from app.supabase_auth import (
     admin_client, current_user, require_student, require_teacher,
 )
 from app.answer_verification import verify_answer
+from app.presentation import question_translation, feedback_translation, recommendation_translation
 from app.topics import TOPICS
 from app.topics.development.binomial.manual import BinomialTopic
 
@@ -90,6 +91,9 @@ def review(test, student_id):
                           corrective_guidance=TOPICS[data["topic_id"]].teaching_recommendation(row["misconception"]) if row["misconception"] else "Review the worked solution.")
         if not row["correct"] and not row["misconception"]:
             detail["diagnosis_status"] = "unknown"
+        # Presentation metadata is derived after grading/snapshot loading. It is
+        # never written back to historical questions, answers or verification.
+        detail.update(feedback_translation(question, detail, TOPICS[data["topic_id"]]))
         answers.append(detail)
     return {**public_detail(test), **progress(test, rows), "answers": answers}
 
@@ -222,8 +226,13 @@ def public_detail(test: dict, include_questions: bool = False) -> dict:
     }
     if include_questions:
         # Never expose correct_option_id, explanations, or misconception labels.
-        result["questions"] = [
-            {
+        result["questions"] = []
+        for item in items:
+            question = InternalQuestion(**{
+                **item, "options": [InternalOption(**option) for option in item["options"]],
+            })
+            display = question_translation(question, TOPICS.get(item["topic_id"]))
+            public = {
                 "question_id": item["id"],
                 "topic_id": item["topic_id"],
                 "difficulty": item["difficulty"],
@@ -232,9 +241,17 @@ def public_detail(test: dict, include_questions: bool = False) -> dict:
                     {"id": option["id"], "text": option["text"]}
                     for option in item["options"]
                 ],
+                **display,
             }
-            for item in items
-        ]
+            # Keep each public option's identity/order while attaching wording.
+            translated_options = display.get("translations", {}).get("si", {}).get("options", [])
+            translated_text = {option["id"]: option["text"] for option in translated_options}
+            for option in public["options"]:
+                if option["id"] in translated_text:
+                    option["translations"] = {"si": {"text": translated_text[option["id"]]}}
+                if f"options.{option['id']}.text" in display.get("translation_warnings", []):
+                    option["translation_warnings"] = ["text"]
+            result["questions"].append(public)
     return result
 
 
@@ -455,6 +472,10 @@ def test_results(test_id: str, teacher: Annotated[dict, Depends(require_teacher)
                 "code": code,
                 "count": count,
                 "recommendation": TOPICS[t["topic_id"]].teaching_recommendation(code),
+                **recommendation_translation(
+                    TOPICS[t["topic_id"]], code,
+                    TOPICS[t["topic_id"]].teaching_recommendation(code),
+                ),
             }
             for code, count in sorted(
                 t["misconceptions"].items(), key=lambda item: -item[1]
@@ -517,7 +538,8 @@ def teacher_summary(
         "correct_answers": sum(int(r["correct"]) for r in rows),
         "misconception_counts": signals,
         "recommendations": [
-            {"code": s["code"], "action": TOPICS[topic_id].teaching_recommendation(s["code"])}
+            {"code": s["code"], "action": TOPICS[topic_id].teaching_recommendation(s["code"]),
+             **recommendation_translation(TOPICS[topic_id], s["code"], TOPICS[topic_id].teaching_recommendation(s["code"]))}
             for s in signals
         ],
         "note": "Incorrect-answer signals are not confirmed misconceptions.",

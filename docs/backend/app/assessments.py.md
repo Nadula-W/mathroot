@@ -6,7 +6,11 @@
 
 Read the code blocks in order. Each block contains the actual source and an explanation immediately below it. Line numbers match the source snapshot used here. Closing brackets and repeated markup are explained with their surrounding block.
 
-## Lines 1–24: Code section
+
+
+**Bilingual update:** Response construction now adds reviewed Sinhala presentation metadata to public questions, submitted-answer reviews and teacher actions. Canonical saved English, hidden keys, authenticated identities, immutable grades and snapshots remain unchanged. Language selection needs no API parameter.
+
+## Lines 1–27: Code section
 
 ```python
 """Supabase-backed teacher tests and student submissions. No SQLite.
@@ -28,18 +32,21 @@ from app.supabase_auth import (
     admin_client, current_user, require_student, require_teacher,
 )
 from app.answer_verification import verify_answer
+from app.presentation import question_translation, feedback_translation, recommendation_translation
 from app.topics import TOPICS
 from app.topics.development.binomial.manual import BinomialTopic
 
 logger = logging.getLogger("uvicorn.error")
 router = APIRouter(tags=["Supabase assessments"])
+
+
 ```
 
 **Explanation:**
 
 - Imports connect this file to the named helpers/components. app.* imports start from the backend package; . imports use the current package.
 
-## Lines 27–43: answer_rows()
+## Lines 28–46: answer_rows
 
 ```python
 def answer_rows(table="mathroot_answers", **filters):
@@ -59,6 +66,8 @@ def answer_rows(table="mathroot_answers", **filters):
         rows.extend(page)
         if len(page) < 500:
             return rows
+
+
 ```
 
 **Explanation:**
@@ -67,10 +76,10 @@ def answer_rows(table="mathroot_answers", **filters):
 - Begins an operation on the named Supabase table. select/insert/delete and the filters specify the operation.
 - Adds equality filters to scope the database request to the intended identity/class/test.
 - Sends the built query. .data contains returned rows, with or [] normalizing empty results.
-- Line 40: Requests an inclusive page starting at the number of rows already collected, with at most 500 rows.
-- Line 42: A shorter page signals the end, so the helper returns all accumulated rows.
+- Requests an inclusive page starting at the number of rows already collected, with at most 500 rows.
+- A shorter page signals the end, so the helper returns all accumulated rows.
 
-## Lines 46–56: progress()
+## Lines 47–59: progress
 
 ```python
 def progress(test, rows):
@@ -84,17 +93,19 @@ def progress(test, rows):
             "percentage": round(100 * correct / total, 1) if total else 0,
             "status": "Completed" if completed else "In Progress" if rows else "Not Started",
             "completed_at": max((r.get("created_at", "") for r in rows), default=None) if completed else None}
+
+
 ```
 
 **Explanation:**
 
 - Keeps answers belonging to saved question IDs, counts correct/incorrect answers and calculates percentage over the full test. All answered means Completed; some means In Progress. The latest answer timestamp becomes completion time.
-- Line 48: Builds a set of saved question IDs; set lookup is used to ignore unrelated answers during scoring.
-- Line 51: Counts persisted true correctness values. The frontend cannot increase this by changing React state.
-- Line 52: An empty test is not considered complete; a nonempty test completes only when every saved question has an answer.
-- Line 54: Converts the correct count to a percentage and avoids dividing by zero for an empty test.
+- Builds a set of saved question IDs; set lookup is used to ignore unrelated answers during scoring.
+- Counts persisted true correctness values. The frontend cannot increase this by changing React state.
+- An empty test is not considered complete; a nonempty test completes only when every saved question has an answer.
+- Converts the correct count to a percentage and avoids dividing by zero for an empty test.
 
-## Lines 59–82: review()
+## Lines 60–83: review
 
 ```python
 def review(test, student_id):
@@ -127,11 +138,11 @@ def review(test, student_id):
 
 - Reads the student history, sorts answers into question order and reconstructs internal questions. Saved verification snapshots preserve accepted feedback; legacy answers use manual text without invoking AI again.
 - Reuses the saved feedback snapshot for consistent review/retry; legacy rows without a snapshot use manual text.
-- Line 63: Records each question's original test position, used to restore answer-review ordering.
-- Line 69: Counts matching topic/misconception signals across saved class history. Repetition is still evidence, not proof of a diagnosis.
-- Line 82: Reads the optional persisted feedback snapshot. get also works for historical rows lacking this field.
+- Records each question's original test position, used to restore answer-review ordering.
+- Counts matching topic/misconception signals across saved class history. Repetition is still evidence, not proof of a diagnosis.
+- Reads the optional persisted feedback snapshot. get also works for historical rows lacking this field.
 
-## Lines 83–94: review()
+## Lines 84–100: review()
 
 ```python
         if snapshot:
@@ -144,17 +155,22 @@ def review(test, student_id):
                           corrective_guidance=TOPICS[data["topic_id"]].teaching_recommendation(row["misconception"]) if row["misconception"] else "Review the worked solution.")
         if not row["correct"] and not row["misconception"]:
             detail["diagnosis_status"] = "unknown"
+        # Presentation metadata is derived after grading/snapshot loading. It is
+        # never written back to historical questions, answers or verification.
+        detail.update(feedback_translation(question, detail, TOPICS[data["topic_id"]]))
         answers.append(detail)
     return {**public_detail(test), **progress(test, rows), "answers": answers}
+
+
 ```
 
 **Explanation:**
 
 - Reads the student history, sorts answers into question order and reconstructs internal questions. Saved verification snapshots preserve accepted feedback; legacy answers use manual text without invoking AI again.
 - Reuses the saved feedback snapshot for consistent review/retry; legacy rows without a snapshot use manual text.
-- Line 92: A wrong answer without a supported misconception remains uncertain instead of inventing a diagnosis.
+- A wrong answer without a supported misconception remains uncertain instead of inventing a diagnosis.
 
-## Lines 97–105: student_classes()
+## Lines 101–111: student_classes
 
 ```python
 @router.get("/api/student/classes")
@@ -166,6 +182,8 @@ def student_classes(student: Annotated[dict, Depends(require_student)]):
             teacher = first("profiles", "id", group["teacher_id"], "full_name")
             result.append({"class_id": group["id"], "teacher_name": (teacher or {}).get("full_name")})
     return result
+
+
 ```
 
 **Explanation:**
@@ -174,7 +192,7 @@ def student_classes(student: Annotated[dict, Depends(require_student)]):
 - FastAPI resolves the declared authentication dependencies before running the route body.
 - The decorator connects this HTTP method/path to the following Python route function.
 
-## Lines 108–116: student_results()
+## Lines 112–122: student_results
 
 ```python
 @router.get("/api/student/results")
@@ -186,6 +204,8 @@ def student_results(student: Annotated[dict, Depends(require_student)]):
             if state["status"] == "Completed":
                 result.append({**public_detail(test), **state})
     return sorted(result, key=lambda r: r["completed_at"] or "", reverse=True)
+
+
 ```
 
 **Explanation:**
@@ -194,13 +214,15 @@ def student_results(student: Annotated[dict, Depends(require_student)]):
 - FastAPI resolves the declared authentication dependencies before running the route body.
 - The decorator connects this HTTP method/path to the following Python route function.
 
-## Lines 119–122: managed_tests()
+## Lines 123–128: managed_tests
 
 ```python
 @router.get("/api/teacher/tests")
 def managed_tests(teacher: Annotated[dict, Depends(require_teacher)]):
     return [{**public_detail(t), "participant_count": len({a["student_id"] for a in answer_rows(test_id=t["id"])})}
             for t in sorted(answer_rows("mathroot_tests", teacher_id=teacher["id"]), key=lambda t: t.get("created_at", ""), reverse=True)]
+
+
 ```
 
 **Explanation:**
@@ -209,7 +231,7 @@ def managed_tests(teacher: Annotated[dict, Depends(require_teacher)]):
 - FastAPI resolves the declared authentication dependencies before running the route body.
 - The decorator connects this HTTP method/path to the following Python route function.
 
-## Lines 125–133: delete_test()
+## Lines 129–139: delete_test
 
 ```python
 @router.delete("/api/tests/{test_id}")
@@ -221,6 +243,8 @@ def delete_test(test_id: str, teacher: Annotated[dict, Depends(require_teacher)]
     # Existing FK ON DELETE CASCADE removes answers in the same transaction.
     admin_client().table("mathroot_tests").delete().eq("id", test_id).eq("teacher_id", teacher["id"]).execute()
     return {"status": "deleted"}
+
+
 ```
 
 **Explanation:**
@@ -233,7 +257,7 @@ def delete_test(test_id: str, teacher: Annotated[dict, Depends(require_teacher)]
 - Stops the success path with the specified HTTP error status and readable detail.
 - The decorator connects this HTTP method/path to the following Python route function.
 
-## Lines 136–140: saved_progress()
+## Lines 140–146: saved_progress
 
 ```python
 @router.get("/api/tests/{test_id}/progress")
@@ -241,6 +265,8 @@ def saved_progress(test_id: str, student: Annotated[dict, Depends(require_studen
     test = get_test_record(test_id)
     class_member(test["class_id"], student)
     return review(test, student["id"])
+
+
 ```
 
 **Explanation:**
@@ -249,7 +275,7 @@ def saved_progress(test_id: str, student: Annotated[dict, Depends(require_studen
 - FastAPI resolves the declared authentication dependencies before running the route body.
 - The decorator connects this HTTP method/path to the following Python route function.
 
-## Lines 143–147: student_review()
+## Lines 147–153: student_review
 
 ```python
 @router.get("/api/tests/{test_id}/students/{student_id}")
@@ -257,6 +283,8 @@ def student_review(test_id: str, student_id: str, teacher: Annotated[dict, Depen
     test = get_test_record(test_id)
     owned_test(test, teacher["id"])
     return review(test, student_id)
+
+
 ```
 
 **Explanation:**
@@ -265,7 +293,7 @@ def student_review(test_id: str, student_id: str, teacher: Annotated[dict, Depen
 - FastAPI resolves the declared authentication dependencies before running the route body.
 - The decorator connects this HTTP method/path to the following Python route function.
 
-## Lines 150–155: CreateTest
+## Lines 154–161: CreateTest
 
 ```python
 class CreateTest(BaseModel):
@@ -274,6 +302,8 @@ class CreateTest(BaseModel):
     topic_ids: list[str] = Field(min_length=1, max_length=5)
     questions_per_topic: int = Field(ge=1, le=10)
     difficulty: Difficulty = "easy"
+
+
 ```
 
 **Explanation:**
@@ -281,12 +311,14 @@ class CreateTest(BaseModel):
 - The active API input schema. Pydantic checks its fields/constraints before the route body. The student identity is obtained from authentication, not from this JSON.
 - Pydantic checks these declared lengths, ranges or counts before route logic uses the input.
 
-## Lines 158–160: JoinClass
+## Lines 162–166: JoinClass
 
 ```python
 class JoinClass(BaseModel):
     class_id: str = Field(min_length=1, max_length=64)
     join_code: str = Field(min_length=1, max_length=128)
+
+
 ```
 
 **Explanation:**
@@ -294,12 +326,14 @@ class JoinClass(BaseModel):
 - The active API input schema. Pydantic checks its fields/constraints before the route body. The student identity is obtained from authentication, not from this JSON.
 - Pydantic checks these declared lengths, ranges or counts before route logic uses the input.
 
-## Lines 163–165: SubmitTestAnswer
+## Lines 167–171: SubmitTestAnswer
 
 ```python
 class SubmitTestAnswer(BaseModel):
     question_id: str
     option_id: str
+
+
 ```
 
 **Explanation:**
@@ -307,7 +341,7 @@ class SubmitTestAnswer(BaseModel):
 - The active API input schema. Pydantic checks its fields/constraints before the route body. The student identity is obtained from authentication, not from this JSON.
 - This section supplies the surrounding function/component's fixed fields, messages or structure. Closing brackets complete the earlier object/call/markup; they do not make a separate request.
 
-## Lines 168–173: first()
+## Lines 172–179: first
 
 ```python
 def first(table_name: str, column: str, value: str, columns: str = "*") -> dict | None:
@@ -316,6 +350,8 @@ def first(table_name: str, column: str, value: str, columns: str = "*") -> dict 
         .eq(column, value).limit(1).execute().data
     ) or []
     return rows[0] if rows else None
+
+
 ```
 
 **Explanation:**
@@ -325,7 +361,7 @@ def first(table_name: str, column: str, value: str, columns: str = "*") -> dict 
 - Adds equality filters to scope the database request to the intended identity/class/test.
 - Sends the built query. .data contains returned rows, with or [] normalizing empty results.
 
-## Lines 176–180: owned_class()
+## Lines 180–186: owned_class
 
 ```python
 def owned_class(class_id: str, teacher_id: str) -> dict:
@@ -333,6 +369,8 @@ def owned_class(class_id: str, teacher_id: str) -> dict:
     if not group or group["teacher_id"] != teacher_id:
         raise HTTPException(403, "This class is not owned by your teacher account.")
     return group
+
+
 ```
 
 **Explanation:**
@@ -340,13 +378,15 @@ def owned_class(class_id: str, teacher_id: str) -> dict:
 - Compares the saved teacher_id with the verified teacher. Missing or foreign classes raise 403.
 - Stops the success path with the specified HTTP error status and readable detail.
 
-## Lines 183–186: owned_test()
+## Lines 187–192: owned_test
 
 ```python
 def owned_test(test: dict, teacher_id: str) -> None:
     owned_class(test["class_id"], teacher_id)
     if test["teacher_id"] != teacher_id:
         raise HTTPException(403, "You do not own this test.")
+
+
 ```
 
 **Explanation:**
@@ -354,7 +394,7 @@ def owned_test(test: dict, teacher_id: str) -> None:
 - Checks both class ownership and the test's own teacher_id before protected teacher access.
 - Stops the success path with the specified HTTP error status and readable detail.
 
-## Lines 189–202: class_member()
+## Lines 193–208: class_member
 
 ```python
 def class_member(class_id: str, user: dict) -> None:
@@ -371,6 +411,8 @@ def class_member(class_id: str, user: dict) -> None:
     ) or []
     if not record:
         raise HTTPException(403, "Join this class before accessing its tests.")
+
+
 ```
 
 **Explanation:**
@@ -381,7 +423,7 @@ def class_member(class_id: str, user: dict) -> None:
 - Sends the built query. .data contains returned rows, with or [] normalizing empty results.
 - Stops the success path with the specified HTTP error status and readable detail.
 
-## Lines 205–209: get_test_record()
+## Lines 209–215: get_test_record
 
 ```python
 def get_test_record(test_id: str) -> dict:
@@ -389,6 +431,8 @@ def get_test_record(test_id: str) -> dict:
     if not test:
         raise HTTPException(404, "Test not found.")
     return test
+
+
 ```
 
 **Explanation:**
@@ -396,7 +440,7 @@ def get_test_record(test_id: str) -> dict:
 - Looks up the saved test and returns 404 when it does not exist.
 - Stops the success path with the specified HTTP error status and readable detail.
 
-## Lines 212–235: public_detail()
+## Lines 216–245: public_detail
 
 ```python
 def public_detail(test: dict, include_questions: bool = False) -> dict:
@@ -412,8 +456,13 @@ def public_detail(test: dict, include_questions: bool = False) -> dict:
     }
     if include_questions:
         # Never expose correct_option_id, explanations, or misconception labels.
-        result["questions"] = [
-            {
+        result["questions"] = []
+        for item in items:
+            question = InternalQuestion(**{
+                **item, "options": [InternalOption(**option) for option in item["options"]],
+            })
+            display = question_translation(question, TOPICS.get(item["topic_id"]))
+            public = {
                 "question_id": item["id"],
                 "topic_id": item["topic_id"],
                 "difficulty": item["difficulty"],
@@ -422,6 +471,7 @@ def public_detail(test: dict, include_questions: bool = False) -> dict:
                     {"id": option["id"], "text": option["text"]}
                     for option in item["options"]
                 ],
+                **display,
             }
 ```
 
@@ -430,12 +480,21 @@ def public_detail(test: dict, include_questions: bool = False) -> dict:
 - Builds safe summaries/questions without correct_option_id, explanations or misconception labels. Hidden data stays server-side until the relevant answer is submitted.
 - This section supplies the surrounding function/component's fixed fields, messages or structure. Closing brackets complete the earlier object/call/markup; they do not make a separate request.
 
-## Lines 236–238: public_detail()
+## Lines 246–257: public_detail()
 
 ```python
-            for item in items
-        ]
+            # Keep each public option's identity/order while attaching wording.
+            translated_options = display.get("translations", {}).get("si", {}).get("options", [])
+            translated_text = {option["id"]: option["text"] for option in translated_options}
+            for option in public["options"]:
+                if option["id"] in translated_text:
+                    option["translations"] = {"si": {"text": translated_text[option["id"]]}}
+                if f"options.{option['id']}.text" in display.get("translation_warnings", []):
+                    option["translation_warnings"] = ["text"]
+            result["questions"].append(public)
     return result
+
+
 ```
 
 **Explanation:**
@@ -443,7 +502,7 @@ def public_detail(test: dict, include_questions: bool = False) -> dict:
 - Builds safe summaries/questions without correct_option_id, explanations or misconception labels. Hidden data stays server-side until the relevant answer is submitted.
 - This section supplies the surrounding function/component's fixed fields, messages or structure. Closing brackets complete the earlier object/call/markup; they do not make a separate request.
 
-## Lines 241–265: create_class()
+## Lines 258–284: create_class
 
 ```python
 @router.post("/api/classes")
@@ -471,6 +530,8 @@ def create_class(
     except Exception as exc:
         raise HTTPException(409, "Class could not be created; try another ID.") from exc
     return {"class_id": row["id"], "join_code": row["join_code"]}
+
+
 ```
 
 **Explanation:**
@@ -484,7 +545,7 @@ def create_class(
 - The decorator connects this HTTP method/path to the following Python route function.
 - try attempts the operation; catch/except handles failure. finally, where present, performs cleanup even when an error occurs.
 
-## Lines 268–276: teacher_classes()
+## Lines 285–295: teacher_classes
 
 ```python
 @router.get("/api/classes")
@@ -496,6 +557,8 @@ def teacher_classes(teacher: Annotated[dict, Depends(require_teacher)]):
         .execute().data
     ) or []
     return [{"class_id": row["id"], "join_code": row["join_code"]} for row in rows]
+
+
 ```
 
 **Explanation:**
@@ -507,7 +570,7 @@ def teacher_classes(teacher: Annotated[dict, Depends(require_teacher)]):
 - Sends the built query. .data contains returned rows, with or [] normalizing empty results.
 - The decorator connects this HTTP method/path to the following Python route function.
 
-## Lines 279–294: join_class()
+## Lines 296–313: join_class
 
 ```python
 @router.post("/api/classes/join")
@@ -526,6 +589,8 @@ def join_class(req: JoinClass, student: Annotated[dict, Depends(require_student)
         on_conflict="class_id,student_id",
     ).execute()
     return {"status": "joined", "class_id": req.class_id}
+
+
 ```
 
 **Explanation:**
@@ -537,9 +602,9 @@ def join_class(req: JoinClass, student: Annotated[dict, Depends(require_student)
 - Stops the success path with the specified HTTP error status and readable detail.
 - Compares the submitted join code with the saved code before creating membership.
 - The decorator connects this HTTP method/path to the following Python route function.
-- Line 285: Checks for an existing saved record before trying to insert a duplicate submission or membership.
+- Checks for an existing saved record before trying to insert a duplicate submission or membership.
 
-## Lines 297–309: create_test()
+## Lines 314–327: create_test
 
 ```python
 @router.post("/api/tests")
@@ -555,6 +620,7 @@ def create_test(req: CreateTest, teacher: Annotated[dict, Depends(require_teache
         raise HTTPException(422, f"Topics not ready: {', '.join(missing)}")
     if len(req.topic_ids) * req.questions_per_topic > 40:
         raise HTTPException(422, "Maximum 40 questions per test.")
+
 ```
 
 **Explanation:**
@@ -564,7 +630,7 @@ def create_test(req: CreateTest, teacher: Annotated[dict, Depends(require_teache
 - Stops the success path with the specified HTTP error status and readable detail.
 - The decorator connects this HTTP method/path to the following Python route function.
 
-## Lines 311–329: create_test()
+## Lines 328–347: create_test()
 
 ```python
     owned_class(req.class_id, teacher["id"])
@@ -586,16 +652,17 @@ def create_test(req: CreateTest, teacher: Annotated[dict, Depends(require_teache
                 raise HTTPException(422, f"Not enough unique questions for {topic_id}.")
             seen.add(question.source_expression)
             questions.append(asdict(question))
+
 ```
 
 **Explanation:**
 
 - Checks topic choices, limits and class ownership. It generates unique questions, converts dataclasses to dictionaries and inserts the complete question list into one test record.
 - Stops the success path with the specified HTTP error status and readable detail.
-- Line 328: Records this mathematical expression to prevent duplicate questions within the generated topic section.
-- Line 329: Converts the immutable question dataclass into nested dictionaries suitable for JSON storage.
+- Records this mathematical expression to prevent duplicate questions within the generated topic section.
+- Converts the immutable question dataclass into nested dictionaries suitable for JSON storage.
 
-## Lines 331–343: create_test()
+## Lines 348–362: create_test()
 
 ```python
     # One database insert persists the entire test and every question.
@@ -611,6 +678,8 @@ def create_test(req: CreateTest, teacher: Annotated[dict, Depends(require_teache
     )
     logger.info("MathRoot: saved %d questions to Supabase", len(questions))
     return public_detail(saved)
+
+
 ```
 
 **Explanation:**
@@ -620,7 +689,7 @@ def create_test(req: CreateTest, teacher: Annotated[dict, Depends(require_teache
 - Sends the built query. .data contains returned rows, with or [] normalizing empty results.
 - Creates opaque IDs so option identifiers do not reveal correctness/misconception semantics.
 
-## Lines 346–358: list_tests()
+## Lines 363–377: list_tests
 
 ```python
 @router.get("/api/tests")
@@ -636,6 +705,8 @@ def list_tests(
         .order("created_at", desc=True).execute().data
     ) or []
     return [{**public_detail(row), **progress(row, answer_rows("mathroot_answers", test_id=row["id"], student_id=user["id"]))} for row in rows]
+
+
 ```
 
 **Explanation:**
@@ -647,7 +718,7 @@ def list_tests(
 - Sends the built query. .data contains returned rows, with or [] normalizing empty results.
 - The decorator connects this HTTP method/path to the following Python route function.
 
-## Lines 361–365: student_test()
+## Lines 378–384: student_test
 
 ```python
 @router.get("/api/tests/{test_id}")
@@ -655,6 +726,8 @@ def student_test(test_id: str, user: Annotated[dict, Depends(current_user)]):
     test = get_test_record(test_id)
     class_member(test["class_id"], user)
     return public_detail(test, include_questions=True)
+
+
 ```
 
 **Explanation:**
@@ -663,7 +736,7 @@ def student_test(test_id: str, user: Annotated[dict, Depends(current_user)]):
 - FastAPI resolves the declared authentication dependencies before running the route body.
 - The decorator connects this HTTP method/path to the following Python route function.
 
-## Lines 368–388: submit_test_answer()
+## Lines 385–406: submit_test_answer
 
 ```python
 @router.post("/api/tests/{test_id}/answers/submit")
@@ -687,6 +760,7 @@ def submit_test_answer(
     existing = answer_rows(test_id=test_id, question_id=req.question_id, student_id=student["id"])
     if existing:
         return next(a for a in review(test, student["id"])["answers"] if a["question_id"] == req.question_id)
+
 ```
 
 **Explanation:**
@@ -695,9 +769,9 @@ def submit_test_answer(
 - FastAPI resolves the declared authentication dependencies before running the route body.
 - Stops the success path with the specified HTTP error status and readable detail.
 - The decorator connects this HTTP method/path to the following Python route function.
-- Line 386: Checks for an existing saved record before trying to insert a duplicate submission or membership.
+- Checks for an existing saved record before trying to insert a duplicate submission or membership.
 
-## Lines 390–413: submit_test_answer()
+## Lines 407–430: submit_test_answer()
 
 ```python
     question = InternalQuestion(**{
@@ -733,10 +807,10 @@ def submit_test_answer(
 - Sends the built query. .data contains returned rows, with or [] normalizing empty results.
 - Stops the success path with the specified HTTP error status and readable detail.
 - try attempts the operation; catch/except handles failure. finally, where present, performs cleanup even when an error occurs.
-- Line 398: Delegates grading/feedback to the existing shared service using the server-loaded question and selected option.
-- Line 411: Persists the accepted feedback together with the answer so future views and retries remain consistent.
+- Delegates grading/feedback to the existing shared service using the server-loaded question and selected option.
+- Persists the accepted feedback together with the answer so future views and retries remain consistent.
 
-## Lines 414–425: submit_test_answer()
+## Lines 431–444: submit_test_answer()
 
 ```python
         existing = (
@@ -751,6 +825,8 @@ def submit_test_answer(
         raise HTTPException(503, "Could not save answer to Supabase.") from exc
 
     return next(a for a in review(test, student["id"])["answers"] if a["question_id"] == req.question_id)
+
+
 ```
 
 **Explanation:**
@@ -761,7 +837,7 @@ def submit_test_answer(
 - Sends the built query. .data contains returned rows, with or [] normalizing empty results.
 - Stops the success path with the specified HTTP error status and readable detail.
 
-## Lines 428–450: test_results()
+## Lines 445–468: test_results
 
 ```python
 @router.get("/api/tests/{test_id}/results")
@@ -787,6 +863,7 @@ def test_results(test_id: str, teacher: Annotated[dict, Depends(require_teacher)
         if code:
             for current in (t, s):
                 current["misconceptions"][code] = current["misconceptions"].get(code, 0) + 1
+
 ```
 
 **Explanation:**
@@ -795,7 +872,7 @@ def test_results(test_id: str, teacher: Annotated[dict, Depends(require_teacher)
 - FastAPI resolves the declared authentication dependencies before running the route body.
 - The decorator connects this HTTP method/path to the following Python route function.
 
-## Lines 452–470: test_results()
+## Lines 469–492: test_results()
 
 ```python
     for t in topics.values():
@@ -804,6 +881,10 @@ def test_results(test_id: str, teacher: Annotated[dict, Depends(require_teacher)
                 "code": code,
                 "count": count,
                 "recommendation": TOPICS[t["topic_id"]].teaching_recommendation(code),
+                **recommendation_translation(
+                    TOPICS[t["topic_id"]], code,
+                    TOPICS[t["topic_id"]].teaching_recommendation(code),
+                ),
             }
             for code, count in sorted(
                 t["misconceptions"].items(), key=lambda item: -item[1]
@@ -817,6 +898,7 @@ def test_results(test_id: str, teacher: Annotated[dict, Depends(require_teacher)
             {"code": code, "count": count}
             for code, count in s["misconceptions"].items()
         ]
+
 ```
 
 **Explanation:**
@@ -824,7 +906,7 @@ def test_results(test_id: str, teacher: Annotated[dict, Depends(require_teacher)
 - Tests that results. Read the setup, the operation under test and then the assertions: they state what the working implementation must preserve.
 - This section supplies the surrounding function/component's fixed fields, messages or structure. Closing brackets complete the earlier object/call/markup; they do not make a separate request.
 
-## Lines 472–485: test_results()
+## Lines 493–508: test_results()
 
 ```python
     scores = [s["percentage"] for s in students.values() if s["status"] == "Completed"]
@@ -841,14 +923,16 @@ def test_results(test_id: str, teacher: Annotated[dict, Depends(require_teacher)
         "students": sorted(students.values(), key=lambda s: s["student_id"]),
         "note": "Wrong-answer events suggest misconceptions; they do not prove them.",
     }
+
+
 ```
 
 **Explanation:**
 
 - Tests that results. Read the setup, the operation under test and then the assertions: they state what the working implementation must preserve.
-- Line 472: Includes only completed students when calculating class average/highest/lowest values.
+- Includes only completed students when calculating class average/highest/lowest values.
 
-## Lines 488–511: teacher_summary()
+## Lines 509–532: teacher_summary
 
 ```python
 @router.get("/api/teacher/summary")
@@ -887,7 +971,7 @@ def teacher_summary(
 - Stops the success path with the specified HTTP error status and readable detail.
 - The decorator connects this HTTP method/path to the following Python route function.
 
-## Lines 512–524: teacher_summary()
+## Lines 533–546: teacher_summary()
 
 ```python
     return {
@@ -898,7 +982,8 @@ def teacher_summary(
         "correct_answers": sum(int(r["correct"]) for r in rows),
         "misconception_counts": signals,
         "recommendations": [
-            {"code": s["code"], "action": TOPICS[topic_id].teaching_recommendation(s["code"])}
+            {"code": s["code"], "action": TOPICS[topic_id].teaching_recommendation(s["code"]),
+             **recommendation_translation(TOPICS[topic_id], s["code"], TOPICS[topic_id].teaching_recommendation(s["code"]))}
             for s in signals
         ],
         "note": "Incorrect-answer signals are not confirmed misconceptions.",

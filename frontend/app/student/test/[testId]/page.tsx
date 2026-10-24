@@ -1,5 +1,8 @@
-
 "use client";
+import { TranslationWarning, useLanguage } from "../../../../lib/i18n/LanguageProvider";
+import type { Translatable } from "../../../../lib/i18n/core";
+
+
 
 import { backendApi } from "../../../../lib/backend-api";
 import Link from "next/link";
@@ -7,15 +10,15 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import AssessmentReview, { SavedResult } from "../../../components/AssessmentReview";
 
-type Question = {
+type Question = Translatable & {
   question_id: string;
   topic_id: string;
   difficulty: string;
   statement: string;
-  options: {
+  options: (Translatable & {
     id: string;
     text: string;
-  }[];
+  })[];
 };
 
 type Test = {
@@ -27,7 +30,7 @@ type Test = {
   questions: Question[];
 };
 
-type Answer = {
+type Answer = Translatable & {
   correct: boolean;
   feedback: string;
   correct_answer: string;
@@ -40,6 +43,7 @@ type Answer = {
 };
 
 export default function AssignedTestPage() {
+  const { t, topic, content, errorText } = useLanguage();
   const { testId } = useParams<{ testId: string }>();
 
   const [test, setTest] = useState<Test | null>(null);
@@ -177,21 +181,19 @@ export default function AssignedTestPage() {
     <main className="shell student-shell">
 
       <section className="section-head">
-        <div className="eyebrow">
-          ASSIGNED MATHEMATICS TEST
-        </div>
+        <div className="eyebrow">{t("ASSIGNED MATHEMATICS TEST")}</div>
 
         <h1>
           {loading
-            ? "Loading test..."
-            : test?.title || "Unable to load test"}
+            ? t("Loading test...")
+            : test?.title || t("Unable to load test")}
         </h1>
 
         {test && (
           <p>
-            Class: {test.class_id}
+            {t("Class:")} {test.class_id}
             {" · "}
-            {test.question_count} questions
+            {t("{count} questions", { count: test.question_count })}
           </p>
         )}
       </section>
@@ -199,14 +201,14 @@ export default function AssignedTestPage() {
       {/* Display API errors */}
       {error && (
         <div className="alert" role="alert">
-          {error}
+          {errorText(error)}
         </div>
       )}
 
       {/* Loading state */}
       {loading && (
         <section className="panel narrow">
-          <p>Loading your assigned Mathematics test...</p>
+          <p>{t("Loading your assigned Mathematics test...")}</p>
         </section>
       )}
 
@@ -214,49 +216,42 @@ export default function AssignedTestPage() {
       {!loading && !test && (
         <section className="panel narrow">
           <p>
-            Make sure you are logged in and have joined
-            your teacher's class.
+            {t("Make sure you are logged in and have joined your teacher's class.")}
           </p>
 
           <Link
             href="/student"
             className="button primary full"
-          >
-            Back to My Tests
-          </Link>
+          >{t("Back to My Tests")}</Link>
         </section>
       )}
 
       {/* Test introduction */}
       {!loading && !started && test && (
         <section className="panel narrow">
-          <h2>Ready to Start?</h2>
+          <h2>{t("Ready to Start?")}</h2>
 
-          <p>
-            You are about to begin:
-          </p>
+          <p>{t("You are about to begin:")}</p>
 
           <h3>{test.title}</h3>
 
-          <p>
-            Class: <strong>{test.class_id}</strong>
+          <p>{t("Class:")}<strong>{test.class_id}</strong>
           </p>
 
           <p>
-            Total Questions:{" "}
+            {t("Total Questions:")}{" "}
             <strong>{test.question_count}</strong>
           </p>
 
           <p>
-            Topics:{" "}
+            {t("Topics:")}{" "}
             <strong>
-              {test.topics?.join(", ") || "Mathematics"}
+              {test.topics?.map(topic).join(", ") || t("Mathematics")}
             </strong>
           </p>
 
           <p className="helper">
-            Your answers will be saved automatically
-            under your logged-in student account.
+            {t("Your answers will be saved automatically under your logged-in student account.")}
           </p>
 
           <button
@@ -267,13 +262,10 @@ export default function AssignedTestPage() {
               setStarted(true);
               setError("");
             }}
-          >
-            Start Test
-          </button>
+          >{t("Start Test")}</button>
 
           <p className="helper">
-            Each answer can be submitted only once.
-            Refreshing resumes from your saved answers.
+            {t("Each answer can be submitted only once. Refreshing resumes from your saved answers.")}
           </p>
         </section>
       )}
@@ -283,19 +275,19 @@ export default function AssignedTestPage() {
         <section className="panel assessment-panel">
           <div className="progress-row">
             <strong>
-              Question {index + 1} of{" "}
-              {test?.question_count}
+              {t("Question {number} of {total}", { number: index + 1, total: test?.question_count ?? 0 })}
             </strong>
 
             <span className="difficulty">
-              {question.topic_id}
+              {topic(question.topic_id)}
               {" · "}
-              {question.difficulty}
+              {t(question.difficulty === "easy" ? "Easy" : question.difficulty === "medium" ? "Medium" : "Hard")}
             </span>
           </div>
 
           <div className="question-area">
-            <h2>{question.statement}</h2>
+            <h2>{content(question, "statement")}</h2>
+            <TranslationWarning record={question} fields={["statement"]} />
           </div>
 
           {/* Answer options */}
@@ -317,7 +309,8 @@ export default function AssignedTestPage() {
                 </span>
 
                 <span className="option-text">
-                  {option.text}
+                  {content(option, "text")}
+                  <TranslationWarning record={option} fields={["text"]} />
                 </span>
               </button>
             ))}
@@ -331,35 +324,36 @@ export default function AssignedTestPage() {
               disabled={!selected || busy}
               onClick={submit}
             >
-              {busy
+              {t(busy
                 ? "Saving Answer..."
-                : "Submit Answer"}
+                : "Submit Answer")}
             </button>
           ) : (
             /* AI / Rule-based feedback */
             <div className="feedback-box review">
               <strong>
-                {feedback.correct
+                {t(feedback.correct
                   ? "Correct!"
-                  : "Review your answer"}
+                  : "Review your answer")}
               </strong>
 
-              <p>{feedback.feedback}</p>
-              {feedback.explanation && !feedback.feedback.includes(feedback.explanation) && <p>{feedback.explanation}</p>}
-              {feedback.corrective_guidance && <p>Learning tip: {feedback.corrective_guidance}</p>}
+              <p>{content(feedback, "feedback")}</p>
+              {feedback.explanation && !content(feedback, "feedback").includes(content(feedback, "explanation")) && <p>{content(feedback, "explanation")}</p>}
+              {feedback.corrective_guidance && <p>{t("Learning tip:")} {content(feedback, "corrective_guidance")}</p>}
+              <TranslationWarning record={feedback} />
 
               {!feedback.correct && (
                 <p>
-                  Correct answer:{" "}
-                  {feedback.correct_answer}
+                  {t("Correct answer:")}{" "}
+                  {content(feedback, "correct_answer")}
                 </p>
               )}
 
               {!feedback.correct &&
                 feedback.suspected_misconception && (
                   <p className="helper">
-                    Possible misconception:{" "}
-                    {feedback.suspected_misconception}
+                    {t("Possible misconception:")}{" "}
+                    {t(feedback.suspected_misconception)}
                   </p>
                 )}
 
@@ -368,9 +362,9 @@ export default function AssignedTestPage() {
                 className="button primary full"
                 onClick={advance}
               >
-                {index + 1 === test?.question_count
+                {t(index + 1 === test?.question_count
                   ? "Finish Test"
-                  : "Next Question"}
+                  : "Next Question")}
               </button>
             </div>
           )}
@@ -380,27 +374,20 @@ export default function AssignedTestPage() {
       {/* Completed assessment */}
       {started && complete && test && (
         <section className="panel narrow finished">
-          <h2>Test Completed!</h2>
+          <h2>{t("Test Completed!")}</h2>
 
           <p>
-            You answered{" "}
-            <strong>{saved?.correct ?? 0}</strong> of{" "}
-            <strong>{test.question_count}</strong>{" "}
-            questions correctly.
+            {t("You answered {correct} of {total} questions correctly.", { correct: saved?.correct ?? 0, total: test.question_count })}
           </p>
 
           <p>
-            Your answers have been saved in Supabase.
-            Your teacher can view your results from
-            the teacher dashboard.
+            {t("Your answers have been saved. Your teacher can view your results from the teacher dashboard.")}
           </p>
 
           <Link
             href="/student"
             className="button primary full"
-          >
-            Back to My Tests
-          </Link>
+          >{t("Back to My Tests")}</Link>
         </section>
       )}
       {started && complete && saved && <AssessmentReview result={saved} />}

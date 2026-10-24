@@ -6,15 +6,24 @@
 
 Read the code blocks in order. Each block contains the actual source and an explanation immediately below it. Line numbers match the source snapshot used here. Closing brackets and repeated markup are explained with their surrounding block.
 
-## Lines 2–7: FormEvent
+
+**Bilingual update:** This module now renders user-facing wording through the shared language helpers where needed. Language changes affect labels and validated display metadata, while existing forms, requests, selected answers and saved grades retain their canonical values.
+
+**Form validation:** `validateInput` translates native invalid-field messages; `clearValidation` removes a stale custom message when editing. These handlers change wording only. Existing name/password checks, requested teacher role and Supabase registration/approval behaviour remain in place.
+
+## Lines 1–10: FormEvent
 
 ```tsx
 "use client";
+import { useLanguage } from "../../lib/i18n/LanguageProvider";
+
+
 
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "../../lib/supabase/client";
+
 ```
 
 **Explanation:**
@@ -22,20 +31,22 @@ import { createClient } from "../../lib/supabase/client";
 - Imports connect this file to the named helpers/components. Relative paths start from this file. React supplies hooks, next/link supplies client navigation, and project imports connect to the helpers/components named here.
 - Marks a client component so browser events and React state can be used. Initial HTML may still be server-rendered.
 
-## Lines 9–9: AccountType
+## Lines 11–12: AccountType
 
 ```tsx
 type AccountType = "student" | "teacher";
+
 ```
 
 **Explanation:**
 
 - These TypeScript types specify fields. [] is a list, | null permits no value, and ? marks an optional property. These compile-time checks do not validate network JSON at runtime.
 
-## Lines 11–22: RegisterPage
+## Lines 13–26: RegisterPage
 
 ```tsx
 export default function RegisterPage() {
+  const { t, errorText, validateInput, clearValidation } = useLanguage();
   const router = useRouter();
   const supabase = createClient();
 
@@ -47,6 +58,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
 ```
 
 **Explanation:**
@@ -60,7 +72,7 @@ export default function RegisterPage() {
 - `error` stores the visible error message. The paired setter updates it and triggers rendering.
 - `success` stores the registration success/instructions text. The paired setter updates it and triggers rendering.
 
-## Lines 24–44: register
+## Lines 27–48: register
 
 ```tsx
   async function register(e: FormEvent<HTMLFormElement>) {
@@ -84,16 +96,17 @@ export default function RegisterPage() {
     }
 
     setLoading(true);
+
 ```
 
 **Explanation:**
 
 - `register()`: Checks name/password/confirmation, calls signUp and handles immediate-session versus email-confirmation registration.
-- Line 25: Stops the browser's native form navigation so this async React handler can display progress/errors in place.
-- Line 34: Applies the local minimum password-length check before making a signup request.
-- Line 39: Stops registration when the two typed passwords differ.
+- Stops the browser's native form navigation so this async React handler can display progress/errors in place.
+- Applies the local minimum password-length check before making a signup request.
+- Stops registration when the two typed passwords differ.
 
-## Lines 46–69: Code section
+## Lines 49–73: Code section
 
 ```tsx
     try {
@@ -120,6 +133,7 @@ export default function RegisterPage() {
         router.refresh();
         return;
       }
+
 ```
 
 **Explanation:**
@@ -127,7 +141,7 @@ export default function RegisterPage() {
 - Creates the account request with full_name/requested_role metadata. Teacher approval is separate; email confirmation may delay session creation.
 - Changes the workspace URL without keeping the previous page in history. API permission checks still happen in Python.
 
-## Lines 71–88: Code section
+## Lines 74–91: Code section
 
 ```tsx
       setSuccess(
@@ -154,7 +168,7 @@ export default function RegisterPage() {
 
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 89–93: Code section
+## Lines 92–97: Code section
 
 ```tsx
       <header className="topbar">
@@ -162,31 +176,29 @@ export default function RegisterPage() {
           MathRoot AI
         </Link>
       </header>
+
 ```
 
 **Explanation:**
 
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 95–103: Code section
+## Lines 98–103: Code section
 
 ```tsx
       <section className="section-head">
-        <div className="eyebrow">
-          ACCOUNT REGISTRATION
-        </div>
-        <h1>Create Your Account</h1>
-        <p>
-          Join MathRoot AI for Sri Lankan O/L Mathematics.
-        </p>
+        <div className="eyebrow">{t("ACCOUNT REGISTRATION")}</div>
+        <h1>{t("Create Your Account")}</h1>
+        <p>{t("Join MathRoot AI for Sri Lankan O/L Mathematics.")}</p>
       </section>
+
 ```
 
 **Explanation:**
 
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 105–105: Code section
+## Lines 104–104: Code section
 
 ```tsx
       <section className="panel narrow">
@@ -196,10 +208,10 @@ export default function RegisterPage() {
 
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 106–106: Code section
+## Lines 105–105: Code section
 
 ```tsx
-        <form onSubmit={register}>
+        <form onSubmit={register} onInvalid={validateInput} onInput={clearValidation}>
 ```
 
 **Explanation:**
@@ -207,21 +219,22 @@ export default function RegisterPage() {
 - Connects form submission to its handler; preventDefault avoids a full browser form reload.
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 107–118: Code section
+## Lines 106–118: Code section
 
 ```tsx
           <label className="field">
-            <span>Account Type</span>
+            <span>{t("Account Type")}</span>
             <select
               value={role}
               onChange={(e) =>
                 setRole(e.target.value as AccountType)
               }
             >
-              <option value="student">Student</option>
-              <option value="teacher">Teacher</option>
+              <option value="student">{t("Student")}</option>
+              <option value="teacher">{t("Teacher")}</option>
             </select>
           </label>
+
 ```
 
 **Explanation:**
@@ -229,19 +242,20 @@ export default function RegisterPage() {
 - These are controlled inputs: value comes from state and onChange stores e.target.value back into that state.
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 120–129: Code section
+## Lines 119–129: Code section
 
 ```tsx
           <label className="field">
-            <span>Full Name</span>
+            <span>{t("Full Name")}</span>
             <input
               required
               maxLength={100}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Enter your full name"
+              placeholder={t("Enter your full name")}
             />
           </label>
+
 ```
 
 **Explanation:**
@@ -249,11 +263,11 @@ export default function RegisterPage() {
 - These are controlled inputs: value comes from state and onChange stores e.target.value back into that state.
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 131–140: Code section
+## Lines 130–140: Code section
 
 ```tsx
           <label className="field">
-            <span>Email Address</span>
+            <span>{t("Email Address")}</span>
             <input
               type="email"
               required
@@ -262,6 +276,7 @@ export default function RegisterPage() {
               placeholder="you@example.com"
             />
           </label>
+
 ```
 
 **Explanation:**
@@ -269,11 +284,11 @@ export default function RegisterPage() {
 - These are controlled inputs: value comes from state and onChange stores e.target.value back into that state.
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 142–151: Code section
+## Lines 141–151: Code section
 
 ```tsx
           <label className="field">
-            <span>Password</span>
+            <span>{t("Password")}</span>
             <input
               type="password"
               required
@@ -282,6 +297,7 @@ export default function RegisterPage() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </label>
+
 ```
 
 **Explanation:**
@@ -289,11 +305,11 @@ export default function RegisterPage() {
 - These are controlled inputs: value comes from state and onChange stores e.target.value back into that state.
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 153–176: Code section
+## Lines 152–175: Code section
 
 ```tsx
           <label className="field">
-            <span>Confirm Password</span>
+            <span>{t("Confirm Password")}</span>
             <input
               type="password"
               required
@@ -306,16 +322,16 @@ export default function RegisterPage() {
 
           {role === "teacher" && (
             <p className="helper">
-              Teacher accounts require administrator
-              approval before accessing class results.
+              {t("Teacher accounts require administrator approval before accessing class results.")}
             </p>
           )}
 
           {error && (
             <div className="alert" role="alert">
-              {error}
+              {errorText(error)}
             </div>
           )}
+
 ```
 
 **Explanation:**
@@ -323,21 +339,22 @@ export default function RegisterPage() {
 - These are controlled inputs: value comes from state and onChange stores e.target.value back into that state.
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 178–182: Code section
+## Lines 176–181: Code section
 
 ```tsx
           {success && (
             <div className="alert soft" role="status">
-              {success}
+              {t(success)}
             </div>
           )}
+
 ```
 
 **Explanation:**
 
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 184–200: Code section
+## Lines 182–198: Code section
 
 ```tsx
           <button
@@ -345,13 +362,13 @@ export default function RegisterPage() {
             className="button primary full"
             disabled={loading}
           >
-            {loading ? "Creating account..." : "Register"}
+            {t(loading ? "Creating account..." : "Register")}
           </button>
         </form>
 
         <p className="helper">
-          Already have an account?{" "}
-          <Link href="/login">Log in</Link>
+          {t("Already have an account?")}{" "}
+          <Link href="/login">{t("Log In")}</Link>
         </p>
       </section>
     </main>

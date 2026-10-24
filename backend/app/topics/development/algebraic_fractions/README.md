@@ -1,4 +1,4 @@
-# sasa ? Algebraic Fractions
+# Fernando — Algebraic Fractions
 
 This is an unfinished workspace for topic ID `algebraic_fractions`. It is not registered or ready. No completed Mathematics implementation is provided.
 
@@ -33,3 +33,13 @@ For a smoke check, from `backend` run:
 The import should work; generating or verifying a question intentionally raises until your TODOs are complete. Run the existing suite with `.\.venv\Scripts\python.exe -m pytest tests -q -p no:cacheprovider` before integration.
 
 References: `app/topics/development/binomial/manual.py`, `app/topics/development/binomial/generator.py`, `app/topics/base.py`, `app/answer_verification.py` and `docs/TOPIC_CONTRACT.md`. Use their inputs/outputs as examples, not a requirement to use their provider. Trusted worked explanations must be independently checked; do not execute untrusted mathematical input as Python.
+
+## English and Sinhala without changing Mathematics
+
+1. Implement reviewed bilingual wording in the topic class's `presentation_text(field, text, question=None, misconception=None)` hook in `generator.py`. Use complete known templates or deterministic structured data. Return Sinhala only for wording you have checked; return `None` otherwise. Cover question instructions, worked explanations, misconception feedback, corrective guidance and teaching recommendations. Keep this manual wording available with every AI service off.
+2. Keep `InternalQuestion` canonical. Never generate a second question, change an option ID/order, rewrite a mathematical expression, or create a different correct key for Sinhala. Shared `app.presentation` adds response-only `translations.si` / `translation_warnings`; the frontend selects text immediately without a language API parameter or database change.
+3. For optional dynamic prose, implement `ai.TopicTranslationProvider.translate(masked_text)` using your own configuration/provider. Preserve each `[[MATH_n]]` token exactly once in order, enforce a finite timeout, and raise on bad JSON/service failure. No provider or API key is supplied by this starter.
+4. Implement `validate_translation(field, source, translated, question=None)` using reviewed pairs or deterministic topic templates. It must return exactly `True` before AI text is displayed. Placeholder checks alone cannot verify meaning. Its starter return value is `False`, so unfinished translation safely keeps English with a warning.
+5. Test both reviewed manual wording and valid/invalid provider responses. Confirm unchanged IDs, expressions, correct keys and scores; reject missing/reordered tokens, added numbers/formulas, altered meaning and provider failure. Reuse the existing shared grader and fallback instead of translating an AI answer into a new key. Do not mark this topic ready until the Mathematics and both fallback/display paths are complete.
+
+Use `binomial/presentation.py` as a template example, not a model/provider requirement. The shared `TranslationProvider` interface also permits a custom `cache_key` to distinguish provider/model settings. Approved results are cached in memory, but topic semantic validation runs again on reuse. Your topic's `MODE=manual` prevents its provider calls; reviewed wording should still work. Keep keys in your ignored backend environment and never in `NEXT_PUBLIC_` variables. See `docs/TOPIC_CONTRACT.md` for the full optional contract.

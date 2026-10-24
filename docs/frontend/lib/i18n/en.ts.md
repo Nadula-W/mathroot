@@ -1,0 +1,306 @@
+# en.ts — code explained
+
+**Source:** [frontend/lib/i18n/en.ts](../../../../frontend/lib/i18n/en.ts) · [All frontend explanations](../../SOURCE_INDEX.md)
+
+**What and how:** Application-owned English message dictionary. English messages are stable lookup keys; named placeholders are filled by the pure translation helper. User-entered names/titles and mathematical identities do not become translation keys.
+
+Read the actual source blocks in order. Explanations immediately below each block describe its job and connections.
+
+
+**Bilingual update:** Application-owned English message dictionary. English messages are stable lookup keys; named placeholders are filled by the pure translation helper. User-entered names/titles and mathematical identities do not become translation keys.
+
+## Lines 1–45: en
+
+```typescript
+// Canonical interface wording. Keep in step with si.ts.
+export const en: Record<string, string> = {
+  "Language": "Language",
+  "O/L Mathematics · Development demo": "O/L Mathematics · Development demo",
+  "BECS 32253 · Intelligent Systems": "BECS 32253 · Intelligent Systems",
+  "Discover the idea behind": "Discover the idea behind",
+  "the mistake.": "the mistake.",
+  "A focused mathematics assessment experience for Sri Lankan O/L students, with teaching recommendations for tuition classes.": "A focused mathematics assessment experience for Sri Lankan O/L students, with teaching recommendations for tuition classes.",
+  "Student assessment": "Student assessment",
+  "Take your teacher’s Mathematics tests, view explanations and review your progress.": "Take your teacher’s Mathematics tests, view explanations and review your progress.",
+  "Teacher overview": "Teacher overview",
+  "See submitted answers, error patterns, and topic-specific corrective teaching suggestions.": "See submitted answers, error patterns, and topic-specific corrective teaching suggestions.",
+  "How it works:": "How it works:",
+  "Questions are checked mathematically. AI-assisted feedback uses manual fallback when AI is unavailable. Use your own student or approved teacher account.": "Questions are checked mathematically. AI-assisted feedback uses manual fallback when AI is unavailable. Use your own student or approved teacher account.",
+  "MathRoot AI · University project prototype · Built for desktop and mobile": "MathRoot AI · University project prototype · Built for desktop and mobile",
+  "Teacher Workspace": "Teacher Workspace",
+  "Student Workspace": "Student Workspace",
+  "Hi, {name}": "Hi, {name}",
+  "Teacher": "Teacher",
+  "Student": "Student",
+  "Logging out...": "Logging out...",
+  "Log out": "Log out",
+  "ACCOUNT LOGIN": "ACCOUNT LOGIN",
+  "Welcome Back": "Welcome Back",
+  "Log in to continue learning or teaching.": "Log in to continue learning or teaching.",
+  "Email Address": "Email Address",
+  "Password": "Password",
+  "Logging in...": "Logging in...",
+  "Log In": "Log In",
+  "Don't have an account?": "Don't have an account?",
+  "Register": "Register",
+  "ACCOUNT REGISTRATION": "ACCOUNT REGISTRATION",
+  "Create Your Account": "Create Your Account",
+  "Join MathRoot AI for Sri Lankan O/L Mathematics.": "Join MathRoot AI for Sri Lankan O/L Mathematics.",
+  "Account Type": "Account Type",
+  "Full Name": "Full Name",
+  "Enter your full name": "Enter your full name",
+  "Confirm Password": "Confirm Password",
+  "Teacher accounts require administrator approval before accessing class results.": "Teacher accounts require administrator approval before accessing class results.",
+  "Creating account...": "Creating account...",
+  "Already have an account?": "Already have an account?",
+  "Teacher Approval Pending": "Teacher Approval Pending",
+  "Your account has been registered successfully. An administrator must approve your teacher access before you can create Mathematics tests or view student results.": "Your account has been registered successfully. An administrator must approve your teacher access before you can create Mathematics tests or view student results.",
+  "If your account has been approved,": "If your account has been approved,",
+  "log in again": "log in again",
+```
+
+**Explanation:**
+
+- Each entry pairs a stable interface message with its language wording. Curly-brace placeholders are filled by translate(); mathematical expressions and user-entered values remain data.
+
+## Lines 46–90: Code section
+
+```typescript
+  "STUDENT WORKSPACE": "STUDENT WORKSPACE",
+  "My Mathematics Tests": "My Mathematics Tests",
+  "Your classes, assessments and saved feedback.": "Your classes, assessments and saved feedback.",
+  "Join a Class": "Join a Class",
+  "Class ID": "Class ID",
+  "Teacher join code": "Teacher join code",
+  "Joining...": "Joining...",
+  "Join Class": "Join Class",
+  "My Classes": "My Classes",
+  "Loading classes...": "Loading classes...",
+  "Join your teacher’s class using its ID and code.": "Join your teacher’s class using its ID and code.",
+  "View Tests": "View Tests",
+  "Available Tests": "Available Tests",
+  "Loading tests...": "Loading tests...",
+  "Select a joined class.": "Select a joined class.",
+  "No tests assigned yet.": "No tests assigned yet.",
+  "{count} questions": "{count} questions",
+  "View Results": "View Results",
+  "Continue Test": "Continue Test",
+  "Start Test": "Start Test",
+  "My Results": "My Results",
+  "Loading results...": "Loading results...",
+  "Completed tests will appear here.": "Completed tests will appear here.",
+  "{correct} correct · {incorrect} incorrect": "{correct} correct · {incorrect} incorrect",
+  "View detailed feedback": "View detailed feedback",
+  "You are already enrolled in this class.": "You are already enrolled in this class.",
+  "Class joined successfully.": "Class joined successfully.",
+  "ASSIGNED MATHEMATICS TEST": "ASSIGNED MATHEMATICS TEST",
+  "Loading test...": "Loading test...",
+  "Unable to load test": "Unable to load test",
+  "Class:": "Class:",
+  "Loading your assigned Mathematics test...": "Loading your assigned Mathematics test...",
+  "Make sure you are logged in and have joined your teacher's class.": "Make sure you are logged in and have joined your teacher's class.",
+  "Back to My Tests": "Back to My Tests",
+  "Ready to Start?": "Ready to Start?",
+  "You are about to begin:": "You are about to begin:",
+  "Total Questions:": "Total Questions:",
+  "Topics:": "Topics:",
+  "Mathematics": "Mathematics",
+  "Your answers will be saved automatically under your logged-in student account.": "Your answers will be saved automatically under your logged-in student account.",
+  "Each answer can be submitted only once. Refreshing resumes from your saved answers.": "Each answer can be submitted only once. Refreshing resumes from your saved answers.",
+  "Question {number} of {total}": "Question {number} of {total}",
+  "Saving Answer...": "Saving Answer...",
+  "Submit Answer": "Submit Answer",
+  "Correct!": "Correct!",
+```
+
+**Explanation:**
+
+- Each entry pairs a stable interface message with its language wording. Curly-brace placeholders are filled by translate(); mathematical expressions and user-entered values remain data.
+
+## Lines 91–135: Code section
+
+```typescript
+  "Review your answer": "Review your answer",
+  "Learning tip:": "Learning tip:",
+  "Correct answer:": "Correct answer:",
+  "Possible misconception:": "Possible misconception:",
+  "Finish Test": "Finish Test",
+  "Next Question": "Next Question",
+  "Test Completed!": "Test Completed!",
+  "You answered {correct} of {total} questions correctly.": "You answered {correct} of {total} questions correctly.",
+  "Your answers have been saved. Your teacher can view your results from the teacher dashboard.": "Your answers have been saved. Your teacher can view your results from the teacher dashboard.",
+  "Correct": "Correct",
+  "Incorrect": "Incorrect",
+  "Your answer:": "Your answer:",
+  "Recommended practice:": "Recommended practice:",
+  "Completed {date}": "Completed {date}",
+  "Wrong answers suggest possible misconceptions; they do not prove them.": "Wrong answers suggest possible misconceptions; they do not prove them.",
+  "TEACHER WORKSPACE": "TEACHER WORKSPACE",
+  "From answers to teaching actions.": "From answers to teaching actions.",
+  "Create Mathematics tests and review your students’ progress.": "Create Mathematics tests and review your students’ progress.",
+  "Class setup": "Class setup",
+  "Create the class before generating a test. Students need a join code.": "Create the class before generating a test. Students need a join code.",
+  "Working...": "Working...",
+  "Create / Get join code": "Create / Get join code",
+  "Student join code:": "Student join code:",
+  "No classes loaded yet.": "No classes loaded yet.",
+  "Join code:": "Join code:",
+  "Class {id} is ready. Share the join code with your students.": "Class {id} is ready. Share the join code with your students.",
+  "Teacher Assessment Builder": "Teacher Assessment Builder",
+  "Create Mathematics Test": "Create Mathematics Test",
+  "Select your class": "Select your class",
+  "Test Title": "Test Title",
+  "O/L Mathematics Practice Test": "O/L Mathematics Practice Test",
+  "Select Mathematics Topics": "Select Mathematics Topics",
+  "Ready": "Ready",
+  "Coming soon": "Coming soon",
+  "Questions per Topic": "Questions per Topic",
+  "Difficulty": "Difficulty",
+  "Easy": "Easy",
+  "Medium": "Medium",
+  "Hard": "Hard",
+  "Generate Test": "Generate Test",
+  "Test created: {title}": "Test created: {title}",
+  "Manage Mathematics Tests": "Manage Mathematics Tests",
+  "Filter by class": "Filter by class",
+  "All my classes": "All my classes",
+  "Reload Tests": "Reload Tests",
+```
+
+**Explanation:**
+
+- Each entry pairs a stable interface message with its language wording. Curly-brace placeholders are filled by translate(); mathematical expressions and user-entered values remain data.
+
+## Lines 136–180: Code section
+
+```typescript
+  "Loading...": "Loading...",
+  "No tests in this selection. Create a class and generate a test above.": "No tests in this selection. Create a class and generate a test above.",
+  "{count} participating students": "{count} participating students",
+  "Copy Student Link": "Copy Student Link",
+  "Student Link": "Student Link",
+  "Delete Test": "Delete Test",
+  "Results — {title}": "Results — {title}",
+  "{enrolled} enrolled · {attempted} attempted · {completed} completed": "{enrolled} enrolled · {attempted} attempted · {completed} completed",
+  "Completed scores: average {average}% · highest {highest}% · lowest {lowest}%": "Completed scores: average {average}% · highest {highest}% · lowest {lowest}%",
+  "No submissions yet.": "No submissions yet.",
+  "Inspect answers": "Inspect answers",
+  "Common misconceptions and teaching actions": "Common misconceptions and teaching actions",
+  "No misconception signals recorded.": "No misconception signals recorded.",
+  "{count} signals.": "{count} signals.",
+  "Delete “{title}”? This permanently deletes this test and all its student submissions and results.": "Delete “{title}”? This permanently deletes this test and all its student submissions and results.",
+  "Test and its submissions deleted.": "Test and its submissions deleted.",
+  "Student link copied. Students must join the class before opening it.": "Student link copied. Students must join the class before opening it.",
+  "Clipboard unavailable. Open the student link and copy its address.": "Clipboard unavailable. Open the student link and copy its address.",
+  "Not Started": "Not Started",
+  "In Progress": "In Progress",
+  "Completed": "Completed",
+  "Binomial Expressions": "Binomial Expressions",
+  "Factors of Quadratic Expressions": "Factors of Quadratic Expressions",
+  "Equations": "Equations",
+  "Algebraic Fractions": "Algebraic Fractions",
+  "Indices and Logarithms": "Indices and Logarithms",
+  "DISTRIBUTION_CONSTANT": "DISTRIBUTION_CONSTANT",
+  "DISTRIBUTION_VARIABLE": "DISTRIBUTION_VARIABLE",
+  "SIGN_ERROR": "SIGN_ERROR",
+  "COEFFICIENT_ERROR": "COEFFICIENT_ERROR",
+  "UNLIKE_TERMS": "UNLIKE_TERMS",
+  "ARITHMETIC_ERROR": "ARITHMETIC_ERROR",
+  "VARIABLE_CONSTANT_CONFUSION": "VARIABLE_CONSTANT_CONFUSION",
+  "Some content has no verified Sinhala translation. The original English is shown.": "Some content has no verified Sinhala translation. The original English is shown.",
+  "Untranslated error: {message}": "Untranslated error: {message}",
+  "Enter your full name.": "Enter your full name.",
+  "Password must contain at least 8 characters.": "Password must contain at least 8 characters.",
+  "Passwords do not match.": "Passwords do not match.",
+  "Registration submitted. Check your email for a confirmation link, then log in.": "Registration submitted. Check your email for a confirmation link, then log in.",
+  "Could not load account profile.": "Could not load account profile.",
+  "Login failed.": "Login failed.",
+  "Registration failed.": "Registration failed.",
+  "Invalid login credentials": "Invalid login credentials",
+  "Email not confirmed": "Email not confirmed",
+  "User already registered": "User already registered",
+```
+
+**Explanation:**
+
+- Each entry pairs a stable interface message with its language wording. Curly-brace placeholders are filled by translate(); mathematical expressions and user-entered values remain data.
+
+## Lines 181–225: Code section
+
+```typescript
+  "Signup requires a valid password": "Signup requires a valid password",
+  "Email rate limit exceeded": "Email rate limit exceeded",
+  "Failed to fetch": "Failed to fetch",
+  "Unable to join class.": "Unable to join class.",
+  "Invalid test link.": "Invalid test link.",
+  "Unable to load this test.": "Unable to load this test.",
+  "Answer submission failed.": "Answer submission failed.",
+  "Could not load classes.": "Could not load classes.",
+  "Class setup failed.": "Class setup failed.",
+  "Cannot load topics. Check backend port 8000.": "Cannot load topics. Check backend port 8000.",
+  "Enter class ID, title and select a topic.": "Enter class ID, title and select a topic.",
+  "Creation failed.": "Creation failed.",
+  "Unable to load tests.": "Unable to load tests.",
+  "Unable to load results.": "Unable to load results.",
+  "Deletion failed.": "Deletion failed.",
+  "Unable to load answers.": "Unable to load answers.",
+  "Please log in again.": "Please log in again.",
+  "Please log in.": "Please log in.",
+  "Invalid login session.": "Invalid login session.",
+  "Authentication service is temporarily unavailable. Please retry.": "Authentication service is temporarily unavailable. Please retry.",
+  "Login session could not be verified. Please log in again.": "Login session could not be verified. Please log in again.",
+  "User profile not found.": "User profile not found.",
+  "Your profile could not be loaded. Please try again.": "Your profile could not be loaded. Please try again.",
+  "Approved teacher account required.": "Approved teacher account required.",
+  "Student account required.": "Student account required.",
+  "You do not own this test.": "You do not own this test.",
+  "This class is not owned by your teacher account.": "This class is not owned by your teacher account.",
+  "Teacher account is awaiting approval.": "Teacher account is awaiting approval.",
+  "Join this class before accessing its tests.": "Join this class before accessing its tests.",
+  "Test not found.": "Test not found.",
+  "Class ID is required.": "Class ID is required.",
+  "This class ID is already in use.": "This class ID is already in use.",
+  "Class could not be created; try another ID.": "Class could not be created; try another ID.",
+  "Class ID does not exist.": "Class ID does not exist.",
+  "Incorrect class join code.": "Incorrect class join code.",
+  "Test title must contain at least three characters.": "Test title must contain at least three characters.",
+  "Select each topic only once.": "Select each topic only once.",
+  "Maximum 40 questions per test.": "Maximum 40 questions per test.",
+  "Question is not in this test.": "Question is not in this test.",
+  "Unknown answer option.": "Unknown answer option.",
+  "Topic module is unavailable.": "Topic module is unavailable.",
+  "Topic module not available.": "Topic module not available.",
+  "Could not save answer to Supabase.": "Could not save answer to Supabase.",
+  "Topics not ready: {topics}": "Topics not ready: {topics}",
+  "Not enough unique questions for {topic}.": "Not enough unique questions for {topic}.",
+```
+
+**Explanation:**
+
+- Each entry pairs a stable interface message with its language wording. Curly-brace placeholders are filled by translate(); mathematical expressions and user-entered values remain data.
+
+## Lines 226–238: Code section
+
+```typescript
+  "Request failed: HTTP {status}": "Request failed: HTTP {status}",
+  "Backend returned HTTP {status}: {detail}": "Backend returned HTTP {status}: {detail}",
+  "Invalid input": "Invalid input",
+  "Supabase is temporarily unreachable. Please retry. If you submitted an answer, reload the test to check its saved progress.": "Supabase is temporarily unreachable. Please retry. If you submitted an answer, reload the test to check its saved progress.",
+  "Field required": "Field required",
+  "Enter a valid email address.": "Enter a valid email address.",
+  "Input should be a valid string": "Input should be a valid string",
+  "Input should be a valid integer": "Input should be a valid integer",
+  "Input should be greater than or equal to {count}": "Input should be greater than or equal to {count}",
+  "Input should be less than or equal to {count}": "Input should be less than or equal to {count}",
+  "String should have at least {count} characters": "String should have at least {count} characters",
+  "String should have at most {count} characters": "String should have at most {count} characters"
+};
+```
+
+**Explanation:**
+
+- Each entry pairs a stable interface message with its language wording. Curly-brace placeholders are filled by translate(); mathematical expressions and user-entered values remain data.
+
+## How to explain this file in the viva
+
+Application-owned English message dictionary. English messages are stable lookup keys; named placeholders are filled by the pure translation helper. User-entered names/titles and mathematical identities do not become translation keys.

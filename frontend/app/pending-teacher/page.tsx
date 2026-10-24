@@ -1,11 +1,14 @@
-
 "use client";
+import { useLanguage } from "../../lib/i18n/LanguageProvider";
+
+
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "../../lib/supabase/client";
 
 export default function PendingTeacherPage() {
+  const { t } = useLanguage();
   const router = useRouter();
   const supabase = createClient();
 
@@ -18,25 +21,22 @@ export default function PendingTeacherPage() {
   return (
     <main className="shell student-shell">
       <section className="panel narrow">
-        <h1>Teacher Approval Pending</h1>
+        <h1>{t("Teacher Approval Pending")}</h1>
 
         <p>
-          Your account has been registered successfully.
-          An administrator must approve your teacher
-          access before you can create Mathematics tests
-          or view student results.
+          {t("Your account has been registered successfully. An administrator must approve your teacher access before you can create Mathematics tests or view student results.")}
         </p>
 
         <p>
-          If your account has been approved,{" "}
-          <Link href="/login">log in again</Link>.
+          {t("If your account has been approved,")}{" "}
+          <Link href="/login">{t("log in again")}</Link>.
         </p>
 
         <button
           className="button primary full"
           onClick={logout}
         >
-          Log Out
+          {t("Log out")}
         </button>
       </section>
     </main>

@@ -1,59 +1,109 @@
-# REST API for Nadula's student and teacher interfaces
+# REST API for MathRoot student and teacher interfaces
 
-Open `http://127.0.0.1:8000/docs` to try these endpoints in Swagger UI.
+Open `http://127.0.0.1:8000/docs` for the current FastAPI schema. Browser assessment requests use `/backend/api/...`; Next.js forwards them to FastAPI's `/api/...` routes.
 
-## GET `/api/topics`
-Returns topic IDs, display names, owners and implementation status.
+## Authentication and access
 
-## POST `/api/questions/generate`
+Assessment requests require `Authorization: Bearer <Supabase access token>`. `frontend/lib/backend-api.ts` adds it from the current session. FastAPI verifies the user and checks approved role, class membership or teacher ownership. Student identity and grades are never accepted from form fields. Login/registration communicate with Supabase Auth directly.
 
-```json
-{"topic_id":"binomial","difficulty":"easy","class_id":"class-001"}
-```
+## Topics and service status
 
-Response (illustrative, values will vary):
+| Method and URL | Result |
+| --- | --- |
+| `GET /health` | Backend process status; not a database connectivity test. |
+| `GET /api/topics` | Topic IDs, names, owners and readiness; only `binomial` is ready. |
+| `GET /api/ai/status` | Local Ollama/model availability for the existing Binomial provider. |
+
+## Classes
+
+| Method and URL | Access and behaviour |
+| --- | --- |
+| `POST /api/classes?class_id=class-001` | Teacher creates a class or retrieves their existing class/join code. |
+| `GET /api/classes` | Teacher's owned classes and join codes. |
+| `POST /api/classes/join` | Student joins with `{"class_id":"class-001","join_code":"..."}`. |
+| `GET /api/student/classes` | Student's saved memberships. |
+
+## Test creation and listings
+
+`POST /api/tests` requires an owning teacher:
 
 ```json
 {
-  "question_id":"uuid-value",
-  "topic_id":"binomial",
-  "difficulty":"easy",
-  "class_id":"class-001",
-  "statement":"Expand and simplify: 3(x + 4)",
-  "options":[
-    {"id":"opaque-id-a","text":"3x + 12"},
-    {"id":"opaque-id-b","text":"3x + 4"},
-    {"id":"opaque-id-c","text":"x + 12"},
-    {"id":"opaque-id-d","text":"3x - 12"}
-  ]
+  "title": "Distribution practice",
+  "class_id": "class-001",
+  "topic_ids": ["binomial"],
+  "questions_per_topic": 5,
+  "difficulty": "easy"
 }
 ```
 
-**SECURITY:** Real generated option IDs are opaque UUIDs. The server stores the answer key and misconception mapping privately. The sample IDs above are placeholders, not actual IDs.
+The backend generates the test once, mathematically validates questions, and stores the canonical question array in `mathroot_tests`.
 
-## POST `/api/answers/submit`
+| Method and URL | Result |
+| --- | --- |
+| `GET /api/tests?class_id=class-001` | Accessible class tests, with the student's saved progress where appropriate. |
+| `GET /api/teacher/tests` | Teacher's owned tests and participation counts. |
+| `GET /api/tests/{test_id}` | Test details and safe questions after class-access checks. |
+| `DELETE /api/tests/{test_id}` | Owning teacher deletes a test; the configured foreign key cascades its answers. |
+
+## Public questions and bilingual presentation
+
+The existing canonical fields stay English. A question's response can additionally contain a `translations.si` map and `translation_warnings` listing text fields without a safe Sinhala translation. The following is illustrative; real IDs are opaque UUIDs:
 
 ```json
-{"question_id":"uuid-value","option_id":"<opaque-id-from-question>","student_id":"S001"}
+{
+  "question_id": "<question UUID>",
+  "topic_id": "binomial",
+  "difficulty": "easy",
+  "statement": "Expand and simplify: 3(x + 4)",
+  "options": [
+    {"id": "<A UUID>", "text": "3x + 12"},
+    {"id": "<B UUID>", "text": "3x + 4"},
+    {"id": "<C UUID>", "text": "x + 12"},
+    {"id": "<D UUID>", "text": "3x - 12"}
+  ],
+  "translations": {
+    "si": {"statement": "ප්‍රසාරණය කර සුළු කරන්න: 3(x + 4)"}
+  },
+  "translation_warnings": []
+}
 ```
 
-Returns correctness, suspected misconception, diagnosis status, explanation and recommended next difficulty. A second submit of the same question by the same student returns HTTP 409.
+Only display text receives translation metadata. Option IDs/order and algebraic text stay intact. Correct keys, explanations and misconception mappings are withheld from unanswered questions. There is **no language query/body parameter**: one response supplies both displays, so switching languages does not regenerate or refetch a test.
 
-## POST `/api/practice/next`
+Reviewed topic templates are preferred. Unknown prose may use a topic's optional translation provider; unsafe or unavailable translations retain English and report missing fields. These metadata additions are response-only: no language column, migration, duplicated test or historical rewrite is required.
+
+## Answer submission and saved progress
+
+`POST /api/tests/{test_id}/answers/submit` requires an enrolled student:
 
 ```json
-{"topic_id":"binomial","class_id":"class-001","student_id":"S001"}
+{"question_id":"<question UUID>","option_id":"<chosen option UUID>"}
 ```
 
-Generates a fresh follow-up question with difficulty adjusted using the last answered question.
+The backend checks the option against the saved key, obtains validated AI feedback or manual fallback, and saves one immutable answer. Retrying returns the original saved result, including concurrent duplicate submissions; it does not award another mark. Results contain canonical feedback and optional Sinhala display metadata for supported statement/explanation/feedback/guidance fields. AI feedback validation is performed before presentation translation.
 
-## GET `/api/teacher/summary?class_id=class-001&topic_id=binomial`
+| Method and URL | Result |
+| --- | --- |
+| `GET /api/tests/{test_id}/progress` | Student's saved answers, score and completion status. |
+| `GET /api/student/results` | Student's completed test results. |
+| `GET /api/tests/{test_id}/students/{student_id}` | Owning teacher's view of one student's saved result. |
 
-Returns attempt counts, number of distinct student IDs, counts of wrong-answer *events* by category, and suggested teacher interventions.
+Old answer rows without a verification snapshot retain their deterministic review path. Reviewed Binomial wording can receive Sinhala presentation on read; unknown legacy prose remains English with a warning. No answer is regraded.
 
-## MVP caveats
+## Teacher results and recommendations
 
-- Demo only, no authentication or class ownership yet. Do not put the service on the public internet or input real children's data.
-- SQLite is used for local development. Replace with PostgreSQL before production.
-- Algebraic question generation and misconception labels are initially deterministic. A trained probabilistic model and optional LLM must be added and evaluated in a later milestone. Do not call the current module a trained AI model.
-- The basic adaptive strategy adjusts difficulty; follow-up question selection by information gain is a later milestone.
+| Method and URL | Result |
+| --- | --- |
+| `GET /api/tests/{test_id}/results` | Owning teacher's student/topic performance and misconception summary. |
+| `GET /api/teacher/summary?class_id=class-001&topic_id=binomial` | Owning teacher's class-level signals and interventions. |
+
+Topic names, statuses and stable misconception codes are localized in the frontend dictionary. Supported teaching action/recommendation text also carries backend presentation metadata. Scores and aggregation continue using canonical IDs/codes.
+
+## Errors and current limits
+
+- `401`: missing/invalid login; `403`: wrong role or class/ownership access.
+- `404`: missing record; `422`: invalid request; `503`: temporary upstream network failure.
+- Fixed API errors are displayed through the frontend's reviewed message map. Unrecognized provider/server text is retained rather than inventing a translation.
+- Current submissions are MCQs. Free-text answers, the four unfinished topics and adaptive diagnosis beyond the existing signals are not enabled.
+- Earlier standalone `/api/questions/generate`, `/api/answers/submit` and `/api/practice/next` demo routes are not the current assessment workflow. Storage is Supabase PostgreSQL, not SQLite.

@@ -44,3 +44,20 @@ class EquationsTopic:
     def answer_feedback_provider(self):
         # The shared verifier calls this optional hook after registration.
         return ai.TopicFeedbackProvider()
+
+
+    def presentation_text(self, field: str, text: str, question=None, misconception=None):
+        # TODO: Match reviewed English/Sinhala templates by exact full text.
+        # Cover statement, explanation, feedback and teaching recommendations.
+        # Keep every mathematical expression unchanged. None means English + warning.
+        return None
+
+    def translation_provider(self):
+        # Optional: use this topic's own provider, never Nadula's configuration.
+        return ai.TopicTranslationProvider()
+
+    def validate_translation(self, field: str, source: str, translated: str, question=None) -> bool:
+        # TODO: Semantically approve only reviewed pairs or deterministic topic
+        # templates. Placeholder checks alone cannot prove a translation correct.
+        # Until implemented, all AI translations safely remain English.
+        return False

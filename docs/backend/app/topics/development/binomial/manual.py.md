@@ -6,9 +6,14 @@
 
 Read the code blocks in order. Each block contains the actual source and an explanation immediately below it. Line numbers match the source snapshot used here. Closing brackets and repeated markup are explained with their surrounding block.
 
-## Lines 2–10: Code section
+
+
+**Bilingual update:** Generation and mathematical verification are unchanged. Optional display hooks delegate reviewed wording to the local presentation module and permit an opt-in translation adapter. A translated sentence is accepted only if it agrees with reviewed wording.
+
+## Lines 1–10: Code section
 
 ```python
+
 import random #Select different numbers for new questions
 from uuid import uuid4 #to generate unique IDs for answer options
 from sympy import Symbol, expand, simplify
@@ -24,7 +29,7 @@ x = Symbol('x') #This creates an algebraic variable named
 
 - Imports connect this file to the named helpers/components. app.* imports start from the backend package; . imports use the current package.
 
-## Lines 11–27: _as_text()
+## Lines 11–28: _as_text
 
 ```python
 def _as_text(coefficient: int, constant: int) -> str:
@@ -44,6 +49,7 @@ def _as_text(coefficient: int, constant: int) -> str:
     
     sign = '+' if constant > 0 else '-'
     return f'{x_part} {sign} {abs(constant)}' #abs(constant) obtains the absolute value, preventing expressions such as 3x - -5
+
 ```
 
 **Explanation:**
@@ -120,7 +126,7 @@ class BinomialTopic:
 
 - Chooses difficulty-dependent coefficients, calculates the expansion, creates three diagnostic wrong options, checks uniqueness/equivalence with SymPy, assigns opaque IDs and returns a complete InternalQuestion.
 - Uses SymPy to expand the expression independently of the LLM.
-- Line 62: Computes the expected result independently with SymPy instead of trusting an LLM-generated answer string.
+- Computes the expected result independently with SymPy instead of trusting an LLM-generated answer string.
 
 ## Lines 72–96: generate_question()
 
@@ -258,6 +264,48 @@ class BinomialTopic:
 
 - Adds topic-approved explanation/tip variants for AI selection, preventing unverified mathematical prose from reaching students.
 - This section supplies the surrounding function/component's fixed fields, messages or structure. Closing brackets complete the earlier object/call/markup; they do not make a separate request.
+
+## Lines 163–166: presentation_text()
+
+```python
+    def presentation_text(self, field: str, text: str, question=None, misconception=None):
+        """Reviewed display-only templates; canonical English remains unchanged."""
+        from .presentation import presentation_text
+        return presentation_text(field, text, question, misconception)
+```
+
+**Explanation:**
+
+- Returns reviewed Sinhala wording for a complete known template, or None so unsupported text remains English with a warning. This hook changes presentation only.
+
+## Lines 168–174: translation_provider()
+
+```python
+    def translation_provider(self):
+        """Optional translation connection, independent of grading/generation."""
+        import os
+        if os.getenv('MATHROOT_TRANSLATION_MODE', 'manual').strip().lower() != 'auto':
+            return None
+        from app.presentation import OllamaTranslationProvider
+        return OllamaTranslationProvider()
+```
+
+**Explanation:**
+
+- Returns the topic-owned optional provider adapter. Binomial enables its existing Ollama adapter only in opt-in auto translation mode; other members retain their own provider choice.
+
+## Lines 176–179: validate_translation()
+
+```python
+    def validate_translation(self, field: str, source: str, translated: str, question=None) -> bool:
+        # A new AI sentence is not semantically trusted merely because its math
+        # survived. Add reviewed pairs to presentation.py to approve new wording.
+        return self.presentation_text(field, source, question=question) == translated
+```
+
+**Explanation:**
+
+- Must approve semantic meaning and return exactly True before dynamic AI text is shown. Binomial accepts reviewed equivalents; unfinished member stubs return False.
 
 ## Connected files
 

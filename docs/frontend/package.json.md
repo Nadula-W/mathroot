@@ -6,7 +6,10 @@
 
 Read the code blocks in order. Each block contains the actual source and an explanation immediately below it. Line numbers match the source snapshot used here. Closing brackets and repeated markup are explained with their surrounding block.
 
-## Lines 1–24: Code section
+
+**Bilingual update:** This module now renders user-facing wording through the shared language helpers where needed. Language changes affect labels and validated display metadata, while existing forms, requests, selected answers and saved grades retain their canonical values.
+
+## Lines 1–25: Code section
 
 ```json
 {
@@ -17,7 +20,8 @@ Read the code blocks in order. Each block contains the actual source and an expl
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:i18n": "node tests/i18n.test.cjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

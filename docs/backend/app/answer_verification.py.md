@@ -6,7 +6,11 @@
 
 Read the code blocks in order. Each block contains the actual source and an explanation immediately below it. Line numbers match the source snapshot used here. Closing brackets and repeated markup are explained with their surrounding block.
 
-## Lines 1–13: Code section
+
+
+**Bilingual update:** The Ollama adapter imports its Binomial connection settings lazily when it analyzes feedback. This avoids an eager registry/import cycle for future member modules. Grade comparison, approved wording, confidence checks and automatic manual fallback are unchanged; presentation translation runs later.
+
+## Lines 1–14: Code section
 
 ```python
 """Grounded diagnostic feedback. Models never control the grade or supply executable math."""
@@ -19,16 +23,17 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from app.contracts import InternalQuestion
-from app.topics.development.binomial.generator import OLLAMA_URL, selected_model
 
 logger = logging.getLogger("uvicorn.error")
+
+
 ```
 
 **Explanation:**
 
 - Imports connect this file to the named helpers/components. app.* imports start from the backend package; . imports use the current package.
 
-## Lines 16–22: Analysis
+## Lines 15–23: Analysis
 
 ```python
 class Analysis(BaseModel):
@@ -38,6 +43,8 @@ class Analysis(BaseModel):
     suspected_misconception: str | None
     confidence: float = Field(ge=0, le=1, allow_inf_nan=False)
     corrective_guidance: str = Field(min_length=1, max_length=2000)
+
+
 ```
 
 **Explanation:**
@@ -46,7 +53,7 @@ class Analysis(BaseModel):
 - Pydantic checks these declared lengths, ranges or counts before route logic uses the input.
 - Strict validation rejects wrong types; extra="forbid" rejects unexpected model fields.
 
-## Lines 25–32: FeedbackSelection
+## Lines 24–33: FeedbackSelection
 
 ```python
 class FeedbackSelection(BaseModel):
@@ -57,6 +64,8 @@ class FeedbackSelection(BaseModel):
     suspected_misconception: str | None
     confidence: float = Field(ge=0, le=1, allow_inf_nan=False)
     guidance_index: int = Field(ge=0)
+
+
 ```
 
 **Explanation:**
@@ -65,7 +74,7 @@ class FeedbackSelection(BaseModel):
 - Pydantic checks these declared lengths, ranges or counts before route logic uses the input.
 - Strict validation rejects wrong types; extra="forbid" rejects unexpected model fields.
 
-## Lines 35–35: FeedbackProvider
+## Lines 34–34: FeedbackProvider
 
 ```python
 class FeedbackProvider(Protocol):
@@ -76,10 +85,12 @@ class FeedbackProvider(Protocol):
 - The structural analyze(context) -> Analysis interface. Any provider can implement it without forcing a specific service.
 - This section supplies the surrounding function/component's fixed fields, messages or structure. Closing brackets complete the earlier object/call/markup; they do not make a separate request.
 
-## Lines 36–36: analyze()
+## Lines 35–37: analyze()
 
 ```python
     def analyze(self, context: dict) -> Analysis: ...
+
+
 ```
 
 **Explanation:**
@@ -87,7 +98,7 @@ class FeedbackProvider(Protocol):
 - Builds the Ollama structured chat payload, uses a bounded timeout, checks HTTP status/size, validates the response and resolves indices to approved explanation/guidance text.
 - This section supplies the surrounding function/component's fixed fields, messages or structure. Closing brackets complete the earlier object/call/markup; they do not make a separate request.
 
-## Lines 39–44: setting()
+## Lines 38–45: setting
 
 ```python
 def setting(name: str, default: float, low: float, high: float) -> float:
@@ -96,6 +107,8 @@ def setting(name: str, default: float, low: float, high: float) -> float:
         return value if low <= value <= high else default
     except ValueError:
         return default
+
+
 ```
 
 **Explanation:**
@@ -104,7 +117,7 @@ def setting(name: str, default: float, low: float, high: float) -> float:
 - Reads environment settings instead of committing API keys/provider choices to source.
 - try attempts the operation; catch/except handles failure. finally, where present, performs cleanup even when an error occurs.
 
-## Lines 47–47: OllamaFeedbackProvider
+## Lines 46–46: OllamaFeedbackProvider
 
 ```python
 class OllamaFeedbackProvider:
@@ -115,10 +128,14 @@ class OllamaFeedbackProvider:
 - Groups the fields/methods of OllamaFeedbackProvider. Declarations alone do not call a model or create database records; the following method sections explain execution.
 - This section supplies the surrounding function/component's fixed fields, messages or structure. Closing brackets complete the earlier object/call/markup; they do not make a separate request.
 
-## Lines 48–71: analyze()
+## Lines 47–74: analyze()
 
 ```python
     def analyze(self, context: dict) -> Analysis:
+        # Resolve the default provider only when used. Topic-owned providers may
+        # import Analysis while the topic registry is still being initialized.
+        from app.topics.development.binomial.generator import OLLAMA_URL, selected_model
+
         # Only question content is sent: no user IDs, names, sessions or database keys.
         payload = {
             "model": os.getenv("MATHROOT_ANSWER_MODEL") or selected_model(),
@@ -150,7 +167,7 @@ class OllamaFeedbackProvider:
 - Supplies a JSON schema so Ollama is requested to return a predictable structured response.
 - Reads environment settings instead of committing API keys/provider choices to source.
 
-## Lines 72–80: analyze()
+## Lines 75–85: analyze()
 
 ```python
                 raise ValueError("Oversized model response")
@@ -162,6 +179,8 @@ class OllamaFeedbackProvider:
                 confidence=selection.confidence,
                 corrective_guidance=context["approved_guidance"][selection.guidance_index],
             )
+
+
 ```
 
 **Explanation:**
@@ -170,7 +189,7 @@ class OllamaFeedbackProvider:
 - Checks the returned JSON/object against Pydantic before using its fields.
 - Resolves a model index into trusted text. An invalid index raises and triggers the caller's fallback.
 
-## Lines 83–106: verify_answer()
+## Lines 86–109: verify_answer
 
 ```python
 def verify_answer(question: InternalQuestion, option_id: str, topic, provider: FeedbackProvider | None = None) -> dict:
@@ -205,7 +224,7 @@ def verify_answer(question: InternalQuestion, option_id: str, topic, provider: F
 - This comparison determines the final MCQ grade independently of the language model.
 - Reads environment settings instead of committing API keys/provider choices to source.
 
-## Lines 107–130: verify_answer()
+## Lines 110–133: verify_answer()
 
 ```python
         return result
@@ -242,7 +261,7 @@ def verify_answer(question: InternalQuestion, option_id: str, topic, provider: F
 - Restricts model text to approved explanations/corrections; JSON validity alone would not prevent false mathematics.
 - Checks the returned JSON/object against Pydantic before using its fields.
 
-## Lines 131–137: verify_answer()
+## Lines 134–140: verify_answer()
 
 ```python
                       verification_method="ai_assisted", confidence=analysis.confidence,

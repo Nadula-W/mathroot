@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
 import LanguageSelector from "./components/LanguageSelector";
+import { LanguageProvider } from "../lib/i18n/LanguageProvider";
 
 export const metadata: Metadata = {
   title: "MathRoot AI | O/L Mathematics",
@@ -12,10 +13,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <div className="shell" style={{ display: "flex", justifyContent: "flex-end", paddingTop: 12 }}>
+        <LanguageProvider>
+        <nav className="shell language-navigation" aria-label="Language / භාෂාව">
           <LanguageSelector />
-        </div>
+        </nav>
         {children}
+        </LanguageProvider>
       </body>
     </html>
   );

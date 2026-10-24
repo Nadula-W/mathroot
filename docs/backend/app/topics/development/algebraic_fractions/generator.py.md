@@ -6,7 +6,11 @@
 
 Read the code blocks in order. Each block contains the actual source and an explanation immediately below it. Line numbers match the source snapshot used here. Closing brackets and repeated markup are explained with their surrounding block.
 
-## Lines 1–6: Code section
+
+
+**Bilingual update:** The topic remains unfinished and unregistered. Small optional display hooks provide places for reviewed Sinhala templates, the member-owned translation provider and semantic approval. None/False intentionally keeps unsupported content in English until implemented.
+
+## Lines 1–7: Code section
 
 ```python
 """Fernando: AI-first question generation and the existing TopicModule adapter.
@@ -15,13 +19,14 @@ Unfinished: do not register this topic until manual and AI paths are validated.
 """
 from app.contracts import InternalQuestion
 from . import ai, manual
+
 ```
 
 **Explanation:**
 
 - Imports connect this file to the named helpers/components. app.* imports start from the backend package; . imports use the current package.
 
-## Lines 9–26: generate_question()
+## Lines 9–27: generate_question
 
 ```python
 def generate_question(difficulty: str) -> InternalQuestion:
@@ -42,6 +47,7 @@ def generate_question(difficulty: str) -> InternalQuestion:
             question = manual.generate_question(difficulty)
     manual.validate_question(question)
     return question
+
 ```
 
 **Explanation:**
@@ -100,18 +106,59 @@ class AlgebraicFractionsTopic:
 - Maps a supported code to a teaching/practice activity. Starter topics must implement this; Binomial has working recommendations.
 - This section supplies the surrounding function/component's fixed fields, messages or structure. Closing brackets complete the earlier object/call/markup; they do not make a separate request.
 
-## Lines 44–46: answer_feedback_provider()
+## Lines 44–47: answer_feedback_provider()
 
 ```python
     def answer_feedback_provider(self):
         # The shared verifier calls this optional hook after registration.
         return ai.TopicFeedbackProvider()
+
 ```
 
 **Explanation:**
 
 - Supplies the member's adapter to the existing shared verifier without new routes, pages or database fields.
 - This section supplies the surrounding function/component's fixed fields, messages or structure. Closing brackets complete the earlier object/call/markup; they do not make a separate request.
+
+## Lines 49–53: presentation_text()
+
+```python
+    def presentation_text(self, field: str, text: str, question=None, misconception=None):
+        # TODO: Match reviewed English/Sinhala templates by exact full text.
+        # Cover statement, explanation, feedback and teaching recommendations.
+        # Keep every mathematical expression unchanged. None means English + warning.
+        return None
+```
+
+**Explanation:**
+
+- Returns reviewed Sinhala wording for a complete known template, or None so unsupported text remains English with a warning. This hook changes presentation only.
+
+## Lines 55–57: translation_provider()
+
+```python
+    def translation_provider(self):
+        # Optional: use this topic's own provider, never Nadula's configuration.
+        return ai.TopicTranslationProvider()
+```
+
+**Explanation:**
+
+- Returns the topic-owned optional provider adapter. Binomial enables its existing Ollama adapter only in opt-in auto translation mode; other members retain their own provider choice.
+
+## Lines 59–63: validate_translation()
+
+```python
+    def validate_translation(self, field: str, source: str, translated: str, question=None) -> bool:
+        # TODO: Semantically approve only reviewed pairs or deterministic topic
+        # templates. Placeholder checks alone cannot prove a translation correct.
+        # Until implemented, all AI translations safely remain English.
+        return False
+```
+
+**Explanation:**
+
+- Must approve semantic meaning and return exactly True before dynamic AI text is shown. Binomial accepts reviewed equivalents; unfinished member stubs return False.
 
 ## Connected files
 

@@ -159,3 +159,21 @@ class BinomialTopic:
         return [text + ' ' + question.explanation], [
             'First multiply the variable term, then the constant term, and finally check the signs. Keep unlike terms separate.'
         ]
+
+    def presentation_text(self, field: str, text: str, question=None, misconception=None):
+        """Reviewed display-only templates; canonical English remains unchanged."""
+        from .presentation import presentation_text
+        return presentation_text(field, text, question, misconception)
+
+    def translation_provider(self):
+        """Optional translation connection, independent of grading/generation."""
+        import os
+        if os.getenv('MATHROOT_TRANSLATION_MODE', 'manual').strip().lower() != 'auto':
+            return None
+        from app.presentation import OllamaTranslationProvider
+        return OllamaTranslationProvider()
+
+    def validate_translation(self, field: str, source: str, translated: str, question=None) -> bool:
+        # A new AI sentence is not semantically trusted merely because its math
+        # survived. Add reviewed pairs to presentation.py to approve new wording.
+        return self.presentation_text(field, source, question=question) == translated

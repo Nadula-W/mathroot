@@ -6,10 +6,15 @@
 
 Read the code blocks in order. Each block contains the actual source and an explanation immediately below it. Line numbers match the source snapshot used here. Closing brackets and repeated markup are explained with their surrounding block.
 
-## Lines 1–4: Code section
+
+**Bilingual update:** This module now renders user-facing wording through the shared language helpers where needed. Language changes affect labels and validated display metadata, while existing forms, requests, selected answers and saved grades retain their canonical values.
+
+## Lines 1–6: Code section
 
 ```tsx
 "use client";
+import { useLanguage } from "../../lib/i18n/LanguageProvider";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { backendApi } from "../../lib/backend-api";
@@ -20,7 +25,7 @@ import { backendApi } from "../../lib/backend-api";
 - Imports connect this file to the named helpers/components. Relative paths start from this file. React supplies hooks, next/link supplies client navigation, and project imports connect to the helpers/components named here.
 - Marks a client component so browser events and React state can be used. Initial HTML may still be server-rendered.
 
-## Lines 5–5: Group
+## Lines 7–7: Group
 
 ```tsx
 type Group = { class_id: string; teacher_name: string | null };
@@ -30,7 +35,7 @@ type Group = { class_id: string; teacher_name: string | null };
 
 - These TypeScript types specify fields. [] is a list, | null permits no value, and ? marks an optional property. These compile-time checks do not validate network JSON at runtime.
 
-## Lines 6–6: Test
+## Lines 8–8: Test
 
 ```tsx
 type Test = { test_id: string; title: string; topics: string[]; difficulty: string; question_count: number; status: string; correct: number; incorrect: number; percentage: number; completed_at: string | null };
@@ -40,10 +45,11 @@ type Test = { test_id: string; title: string; topics: string[]; difficulty: stri
 
 - These TypeScript types specify fields. [] is a list, | null permits no value, and ? marks an optional property. These compile-time checks do not validate network JSON at runtime.
 
-## Lines 7–11: StudentPage
+## Lines 9–14: StudentPage
 
 ```tsx
 export default function StudentPage() {
+  const { t, topic, errorText, locale } = useLanguage();
   const [classes, setClasses] = useState<Group[]>([]), [tests, setTests] = useState<Test[]>([]), [results, setResults] = useState<Test[]>([]);
   const [selected, setSelected] = useState(""), [id, setId] = useState(""), [code, setCode] = useState("");
   const [loading, setLoading] = useState(true), [joining, setJoining] = useState(false), [testsLoading, setTestsLoading] = useState(false);
@@ -64,7 +70,7 @@ export default function StudentPage() {
 - `error` stores the visible error message. The paired setter updates it and triggers rendering.
 - `message` stores the success/status text. The paired setter updates it and triggers rendering.
 
-## Lines 12–18: Code section
+## Lines 15–21: Code section
 
 ```tsx
   useEffect(() => {
@@ -81,11 +87,11 @@ export default function StudentPage() {
 - Runs after rendering. [] means mount; a dependency such as selected/testId reruns when that value changes.
 - Cleanup switches off active so late responses cannot update a page after navigation or an older class selection.
 - Starts independent requests together and returns their results in the order supplied.
-- Line 15: Selects the first joined class automatically; ?. handles an empty class list, and || supplies an empty selection.
+- Selects the first joined class automatically; ?. handles an empty class list, and || supplies an empty selection.
 - The API paths in this section connect to FastAPI: `/api/student/classes`, `/api/student/results`. backendApi attaches the access token before sending them.
 - then receives successful request data, catch records an error, and finally clears loading even after failure.
 
-## Lines 19–28: Code section
+## Lines 22–31: Code section
 
 ```tsx
   useEffect(() => {
@@ -104,13 +110,13 @@ export default function StudentPage() {
 
 - Runs after rendering. [] means mount; a dependency such as selected/testId reruns when that value changes.
 - Cleanup switches off active so late responses cannot update a page after navigation or an older class selection.
-- Line 21: Clears the previous class's tests so they are not displayed under the newly selected class.
-- Line 22: Stops before requesting tests when no class is selected.
-- Line 24: Safely inserts the selected class ID into the query string; special characters cannot accidentally change the URL parameters.
+- Clears the previous class's tests so they are not displayed under the newly selected class.
+- Stops before requesting tests when no class is selected.
+- Safely inserts the selected class ID into the query string; special characters cannot accidentally change the URL parameters.
 - The API paths in this section connect to FastAPI: `/api/tests?class_id=`. backendApi attaches the access token before sending them.
 - then receives successful request data, catch records an error, and finally clears loading even after failure.
 
-## Lines 29–36: join
+## Lines 32–39: join
 
 ```tsx
   async function join() {
@@ -128,12 +134,12 @@ export default function StudentPage() {
 - `join()`: Posts class ID/code, refreshes persistent memberships, selects the joined class and shows success/already-enrolled status.
 - Turns the request object into JSON text for the HTTP body.
 - try attempts the operation; catch/except handles failure. finally, where present, performs cleanup even when an error occurs.
-- Line 33: Reloads the membership list after joining; the browser displays what was actually saved by the backend.
-- Line 33: Clears the join-code input after success so it is not unnecessarily retained in the form.
-- Line 34: Chooses a different success message when membership already existed; it is not a new duplicate enrollment.
+- Reloads the membership list after joining; the browser displays what was actually saved by the backend.
+- Clears the join-code input after success so it is not unnecessarily retained in the form.
+- Chooses a different success message when membership already existed; it is not a new duplicate enrollment.
 - The API paths in this section connect to FastAPI: `/api/classes/join`, `/api/student/classes`. backendApi attaches the access token before sending them.
 
-## Lines 37–37: Code section
+## Lines 40–40: Code section
 
 ```tsx
   return <main className="shell student-shell">
@@ -143,54 +149,54 @@ export default function StudentPage() {
 
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 38–39: Code section
+## Lines 41–42: Code section
 
 ```tsx
-    <section className="section-head"><div className="eyebrow">STUDENT WORKSPACE</div><h1>My Mathematics Tests</h1><p>Your classes, assessments and saved feedback.</p></section>
-    {error && <p className="alert" role="alert">{error}</p>}{message && <p className="alert soft" role="status">{message}</p>}
+    <section className="section-head"><div className="eyebrow">{t("STUDENT WORKSPACE")}</div><h1>{t("My Mathematics Tests")}</h1><p>{t("Your classes, assessments and saved feedback.")}</p></section>
+    {error && <p className="alert" role="alert">{errorText(error)}</p>}{message && <p className="alert soft" role="status">{errorText(message)}</p>}
 ```
 
 **Explanation:**
 
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
-- Line 39: Renders an error message only when error contains text; an empty value produces no error panel.
-
-## Lines 40–40: Code section
-
-```tsx
-    <section className="panel"><h2>Join a Class</h2><div className="form-grid">
-```
-
-**Explanation:**
-
-- JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
-
-## Lines 41–41: Code section
-
-```tsx
-      <label className="field"><span>Class ID</span><input value={id} maxLength={64} onChange={e => setId(e.target.value)} /></label>
-```
-
-**Explanation:**
-
-- These are controlled inputs: value comes from state and onChange stores e.target.value back into that state.
-- JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
-
-## Lines 42–42: Code section
-
-```tsx
-      <label className="field"><span>Teacher join code</span><input value={code} maxLength={128} onChange={e => setCode(e.target.value)} /></label></div>
-```
-
-**Explanation:**
-
-- These are controlled inputs: value comes from state and onChange stores e.target.value back into that state.
-- JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
+- Renders an error message only when error contains text; an empty value produces no error panel.
 
 ## Lines 43–43: Code section
 
 ```tsx
-      <button className="button primary" disabled={joining || !id.trim() || !code.trim()} onClick={join}>{joining ? "Joining..." : "Join Class"}</button></section>
+    <section className="panel"><h2>{t("Join a Class")}</h2><div className="form-grid">
+```
+
+**Explanation:**
+
+- JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
+
+## Lines 44–44: Code section
+
+```tsx
+      <label className="field"><span>{t("Class ID")}</span><input value={id} maxLength={64} onChange={e => setId(e.target.value)} /></label>
+```
+
+**Explanation:**
+
+- These are controlled inputs: value comes from state and onChange stores e.target.value back into that state.
+- JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
+
+## Lines 45–45: Code section
+
+```tsx
+      <label className="field"><span>{t("Teacher join code")}</span><input value={code} maxLength={128} onChange={e => setCode(e.target.value)} /></label></div>
+```
+
+**Explanation:**
+
+- These are controlled inputs: value comes from state and onChange stores e.target.value back into that state.
+- JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
+
+## Lines 46–46: Code section
+
+```tsx
+      <button className="button primary" disabled={joining || !id.trim() || !code.trim()} onClick={join}>{t(joining ? "Joining..." : "Join Class")}</button></section>
 ```
 
 **Explanation:**
@@ -199,10 +205,10 @@ export default function StudentPage() {
 - Guards missing inputs, busy operations or already-submitted answers in the UI; server validation remains required.
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 44–44: Code section
+## Lines 47–47: Code section
 
 ```tsx
-    <section className="panel"><h2>My Classes</h2>{loading ? <p role="status">Loading classes...</p> : classes.length === 0 ? <p>Join your teacher’s class using its ID and code.</p> : classes.map(group => <div className="test-entry" key={group.class_id}><div><strong>{group.class_id}</strong><p>{group.teacher_name || "Teacher"}</p></div><button className="button" aria-pressed={selected === group.class_id} onClick={() => { setError(""); setSelected(group.class_id); }}>View Tests</button></div>)}</section>
+    <section className="panel"><h2>{t("My Classes")}</h2>{loading ? <p role="status">{t("Loading classes...")}</p> : classes.length === 0 ? <p>{t("Join your teacher\u2019s class using its ID and code.")}</p> : classes.map(group => <div className="test-entry" key={group.class_id}><div><strong>{group.class_id}</strong><p>{group.teacher_name || t("Teacher")}</p></div><button className="button" aria-pressed={selected === group.class_id} onClick={() => { setError(""); setSelected(group.class_id); }}>{t("View Tests")}</button></div>)}</section>
 ```
 
 **Explanation:**
@@ -210,25 +216,25 @@ export default function StudentPage() {
 - Connects the click to the named handler. The request is made by that handler, not just by rendering the button.
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 - map creates a visible item for each record/option. key gives React a stable identity when the list updates.
-- Line 44: Creates a class card for each membership/owned class. On the student page, View Tests changes selected and therefore reruns the class-test effect.
+- Creates a class card for each membership/owned class. On the student page, View Tests changes selected and therefore reruns the class-test effect.
 
-## Lines 45–45: Code section
+## Lines 48–48: Code section
 
 ```tsx
-    <section className="panel"><h2>Available Tests {selected && `— ${selected}`}</h2>{testsLoading ? <p role="status">Loading tests...</p> : !selected ? <p>Select a joined class.</p> : tests.length === 0 ? <p>No tests assigned yet.</p> : tests.map(test => <div className="test-entry" key={test.test_id}><div><h3>{test.title}</h3><p>{test.topics.join(", ")} · {test.difficulty} · {test.question_count} questions · {test.status}</p></div><Link className="button primary" href={`/student/test/${test.test_id}`}>{test.status === "Completed" ? "View Results" : test.status === "In Progress" ? "Continue Test" : "Start Test"}</Link></div>)}</section>
+    <section className="panel"><h2>{t("Available Tests")} {selected && `— ${selected}`}</h2>{testsLoading ? <p role="status">{t("Loading tests...")}</p> : !selected ? <p>{t("Select a joined class.")}</p> : tests.length === 0 ? <p>{t("No tests assigned yet.")}</p> : tests.map(test => <div className="test-entry" key={test.test_id}><div><h3>{test.title}</h3><p>{test.topics.map(topic).join(", ")} · {t(test.difficulty === "easy" ? "Easy" : test.difficulty === "medium" ? "Medium" : "Hard")} · {t("{count} questions", { count: test.question_count })} · {t(test.status)}</p></div><Link className="button primary" href={`/student/test/${test.test_id}`}>{t(test.status === "Completed" ? "View Results" : test.status === "In Progress" ? "Continue Test" : "Start Test")}</Link></div>)}</section>
 ```
 
 **Explanation:**
 
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 - map creates a visible item for each record/option. key gives React a stable identity when the list updates.
-- Line 45: Creates one test card per server result, using the saved test ID as the React key and navigation target.
-- Line 45: The saved status determines the button label: View Results, Continue Test or Start Test. All labels lead to the same resumable test URL.
+- Creates one test card per server result, using the saved test ID as the React key and navigation target.
+- The saved status determines the button label: View Results, Continue Test or Start Test. All labels lead to the same resumable test URL.
 
-## Lines 46–48: Code section
+## Lines 49–51: Code section
 
 ```tsx
-    <section className="panel"><h2>My Results</h2>{loading ? <p>Loading results...</p> : results.length === 0 ? <p>Completed tests will appear here.</p> : results.map(test => <div className="test-entry" key={test.test_id}><div><h3>{test.title}</h3><p>{test.correct}/{test.question_count} ({test.percentage}%) · {test.correct} correct · {test.incorrect} incorrect</p><p>{test.completed_at && new Date(test.completed_at).toLocaleString()}</p></div><Link className="button" href={`/student/test/${test.test_id}`}>View detailed feedback</Link></div>)}</section>
+    <section className="panel"><h2>{t("My Results")}</h2>{loading ? <p>{t("Loading results...")}</p> : results.length === 0 ? <p>{t("Completed tests will appear here.")}</p> : results.map(test => <div className="test-entry" key={test.test_id}><div><h3>{test.title}</h3><p>{test.correct}/{test.question_count} ({test.percentage}%) · {t("{correct} correct \u00b7 {incorrect} incorrect", { correct: test.correct, incorrect: test.incorrect })}</p><p>{test.completed_at && new Date(test.completed_at).toLocaleString(locale)}</p></div><Link className="button" href={`/student/test/${test.test_id}`}>{t("View detailed feedback")}</Link></div>)}</section>
   </main>;
 }
 ```
@@ -238,7 +244,7 @@ export default function StudentPage() {
 - Formats a returned timestamp for the viewer without changing its stored completion time.
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 - map creates a visible item for each record/option. key gives React a stable identity when the list updates.
-- Line 46: Creates the My Results cards from previously completed server results, including score/counts and a detailed-review link.
+- Creates the My Results cards from previously completed server results, including score/counts and a detailed-review link.
 
 ## Connected files
 

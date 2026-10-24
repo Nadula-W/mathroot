@@ -1,5 +1,7 @@
-
 "use client";
+import { useLanguage } from "../../lib/i18n/LanguageProvider";
+
+
 import { backendApi } from "../../lib/backend-api";
 import { useEffect, useState } from "react";
 
@@ -31,6 +33,7 @@ async function jsonRequest<T>(
 
 
 export default function TestCreator() {
+  const { t, topic: topicLabel, errorText } = useLanguage();
   const [topics, setTopics] = useState<Topic[]>([]);
   const [selected, setSelected] = useState<string[]>(["binomial"]);
   const [classId, setClassId] = useState("");
@@ -81,7 +84,7 @@ export default function TestCreator() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            title: title.trim(),
+            title: (title === "O/L Mathematics Practice Test" ? t(title) : title).trim(),
             class_id: classId.trim(),
             topic_ids: selected,
             questions_per_topic: count,
@@ -101,29 +104,29 @@ export default function TestCreator() {
 
   return (
     <section className="panel" style={{ marginBottom: 24 }}>
-      <div className="panel-kicker">Teacher Assessment Builder</div>
-      <h2>Create Mathematics Test</h2>
+      <div className="panel-kicker">{t("Teacher Assessment Builder")}</div>
+      <h2>{t("Create Mathematics Test")}</h2>
 
-      {error && <div className="alert">{error}</div>}
-      {message && <div className="alert soft">{message}</div>}
+      {error && <div className="alert">{errorText(error)}</div>}
+      {message && <div className="alert soft">{errorText(message)}</div>}
 
       <div className="form-grid">
         <label className="field">
-          <span>Class ID</span>
-          <select value={classId} onChange={e => setClassId(e.target.value)}><option value="">Select your class</option>{classes.map(c => <option key={c.class_id}>{c.class_id}</option>)}</select>
+          <span>{t("Class ID")}</span>
+          <select value={classId} onChange={e => setClassId(e.target.value)}><option value="">{t("Select your class")}</option>{classes.map(c => <option key={c.class_id}>{c.class_id}</option>)}</select>
         </label>
 
         <label className="field">
-          <span>Test Title</span>
+          <span>{t("Test Title")}</span>
           <input
-            value={title}
+            value={title === "O/L Mathematics Practice Test" ? t(title) : title}
             maxLength={100}
             onChange={(e) => setTitle(e.target.value)}
           />
         </label>
       </div>
 
-      <h3>Select Mathematics Topics</h3>
+      <h3>{t("Select Mathematics Topics")}</h3>
 
       <div className="topic-choices">
         {topics.map((topic) => (
@@ -135,10 +138,10 @@ export default function TestCreator() {
               onChange={() => toggle(topic.id)}
             />
             <span>
-              {topic.name}
+              {topicLabel(topic.id)}
               <small>
                 {" "}({topic.owner}) —{" "}
-                {topic.ready ? "Ready" : "Coming soon"}
+                {t(topic.ready ? "Ready" : "Coming soon")}
               </small>
             </span>
           </label>
@@ -147,7 +150,7 @@ export default function TestCreator() {
 
       <div className="form-grid">
         <label className="field">
-          <span>Questions per Topic</span>
+          <span>{t("Questions per Topic")}</span>
           <input
             type="number"
             min={1}
@@ -158,14 +161,14 @@ export default function TestCreator() {
         </label>
 
         <label className="field">
-          <span>Difficulty</span>
+          <span>{t("Difficulty")}</span>
           <select
             value={difficulty}
             onChange={(e) => setDifficulty(e.target.value)}
           >
-            <option value="easy">Easy</option>
-            <option value="medium">Medium</option>
-            <option value="hard">Hard</option>
+            <option value="easy">{t("Easy")}</option>
+            <option value="medium">{t("Medium")}</option>
+            <option value="hard">{t("Hard")}</option>
           </select>
         </label>
       </div>
@@ -181,7 +184,7 @@ export default function TestCreator() {
           count > 10
         }
       >
-        {busy ? "Working..." : "Generate Test"}
+        {t(busy ? "Working..." : "Generate Test")}
       </button>
 
     </section>

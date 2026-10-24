@@ -6,15 +6,24 @@
 
 Read the code blocks in order. Each block contains the actual source and an explanation immediately below it. Line numbers match the source snapshot used here. Closing brackets and repeated markup are explained with their surrounding block.
 
-## Lines 2–7: FormEvent
+
+**Bilingual update:** This module now renders user-facing wording through the shared language helpers where needed. Language changes affect labels and validated display metadata, while existing forms, requests, selected answers and saved grades retain their canonical values.
+
+**Form validation:** The form's `onInvalid` handler uses the provider's `validateInput` to display reviewed required/email/length messages. `onInput` clears a previous custom message after editing. The browser and Supabase still enforce the same validation/authentication rules. Raw request errors stay in state so changing language also updates a visible error.
+
+## Lines 1–10: FormEvent
 
 ```tsx
 "use client";
+import { useLanguage } from "../../lib/i18n/LanguageProvider";
+
+
 
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "../../lib/supabase/client";
+
 ```
 
 **Explanation:**
@@ -22,10 +31,11 @@ import { createClient } from "../../lib/supabase/client";
 - Imports connect this file to the named helpers/components. Relative paths start from this file. React supplies hooks, next/link supplies client navigation, and project imports connect to the helpers/components named here.
 - Marks a client component so browser events and React state can be used. Initial HTML may still be server-rendered.
 
-## Lines 9–16: LoginPage
+## Lines 11–20: LoginPage
 
 ```tsx
 export default function LoginPage() {
+  const { t, errorText, validateInput, clearValidation } = useLanguage();
   const router = useRouter();
   const supabase = createClient();
 
@@ -33,6 +43,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
 ```
 
 **Explanation:**
@@ -42,7 +53,7 @@ export default function LoginPage() {
 - `loading` stores the initial-load/form waiting flag. The paired setter updates it and triggers rendering.
 - `error` stores the visible error message. The paired setter updates it and triggers rendering.
 
-## Lines 18–42: login
+## Lines 21–46: login
 
 ```tsx
   async function login(e: FormEvent<HTMLFormElement>) {
@@ -70,6 +81,7 @@ export default function LoginPage() {
       if (profileError || !profile) {
         throw new Error("Could not load account profile.");
       }
+
 ```
 
 **Explanation:**
@@ -77,9 +89,9 @@ export default function LoginPage() {
 - `login()`: Prevents form reload, signs in with Supabase, reads the approved profile role and redirects to the correct workspace.
 - Supabase checks email/password and returns a user/session. The profile query decides the approved workspace.
 - Adds equality filters to scope the database request to the intended identity/class/test.
-- Line 19: Stops the browser's native form navigation so this async React handler can display progress/errors in place.
+- Stops the browser's native form navigation so this async React handler can display progress/errors in place.
 
-## Lines 44–66: Code section
+## Lines 47–69: Code section
 
 ```tsx
       if (profile.role === "teacher") {
@@ -111,10 +123,10 @@ export default function LoginPage() {
 
 - Changes the workspace URL without keeping the previous page in history. API permission checks still happen in Python.
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
-- Line 44: Uses the approved database role to identify teacher access; requesting a role during signup is not sufficient.
-- Line 46: Detects a teacher applicant who has not yet received approved teacher access and sends them to the waiting page.
+- Uses the approved database role to identify teacher access; requesting a role during signup is not sufficient.
+- Detects a teacher applicant who has not yet received approved teacher access and sends them to the waiting page.
 
-## Lines 67–71: Code section
+## Lines 70–75: Code section
 
 ```tsx
       <header className="topbar">
@@ -122,27 +134,29 @@ export default function LoginPage() {
           MathRoot AI
         </Link>
       </header>
+
 ```
 
 **Explanation:**
 
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 73–77: Code section
+## Lines 76–81: Code section
 
 ```tsx
       <section className="section-head">
-        <div className="eyebrow">ACCOUNT LOGIN</div>
-        <h1>Welcome Back</h1>
-        <p>Log in to continue learning or teaching.</p>
+        <div className="eyebrow">{t("ACCOUNT LOGIN")}</div>
+        <h1>{t("Welcome Back")}</h1>
+        <p>{t("Log in to continue learning or teaching.")}</p>
       </section>
+
 ```
 
 **Explanation:**
 
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 79–79: Code section
+## Lines 82–82: Code section
 
 ```tsx
       <section className="panel narrow">
@@ -152,10 +166,10 @@ export default function LoginPage() {
 
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 80–80: Code section
+## Lines 83–83: Code section
 
 ```tsx
-        <form onSubmit={login}>
+        <form onSubmit={login} onInvalid={validateInput} onInput={clearValidation}>
 ```
 
 **Explanation:**
@@ -163,11 +177,11 @@ export default function LoginPage() {
 - Connects form submission to its handler; preventDefault avoids a full browser form reload.
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 81–89: Code section
+## Lines 84–93: Code section
 
 ```tsx
           <label className="field">
-            <span>Email Address</span>
+            <span>{t("Email Address")}</span>
             <input
               type="email"
               required
@@ -175,6 +189,7 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
             />
           </label>
+
 ```
 
 **Explanation:**
@@ -182,11 +197,11 @@ export default function LoginPage() {
 - These are controlled inputs: value comes from state and onChange stores e.target.value back into that state.
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 91–105: Code section
+## Lines 94–109: Code section
 
 ```tsx
           <label className="field">
-            <span>Password</span>
+            <span>{t("Password")}</span>
             <input
               type="password"
               required
@@ -197,9 +212,10 @@ export default function LoginPage() {
 
           {error && (
             <div className="alert" role="alert">
-              {error}
+              {errorText(error)}
             </div>
           )}
+
 ```
 
 **Explanation:**
@@ -207,7 +223,7 @@ export default function LoginPage() {
 - These are controlled inputs: value comes from state and onChange stores e.target.value back into that state.
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 107–123: Code section
+## Lines 110–126: Code section
 
 ```tsx
           <button
@@ -215,13 +231,13 @@ export default function LoginPage() {
             type="submit"
             disabled={loading}
           >
-            {loading ? "Logging in..." : "Log In"}
+            {t(loading ? "Logging in..." : "Log In")}
           </button>
         </form>
 
         <p className="helper">
-          Don't have an account?{" "}
-          <Link href="/register">Register</Link>
+          {t("Don't have an account?")}{" "}
+          <Link href="/register">{t("Register")}</Link>
         </p>
       </section>
     </main>

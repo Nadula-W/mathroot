@@ -6,12 +6,21 @@
 
 Read the code blocks in order. Each block contains the actual source and an explanation immediately below it. Line numbers match the source snapshot used here. Closing brackets and repeated markup are explained with their surrounding block.
 
-## Lines 2–4: Code section
+
+**Bilingual update:** This module now renders user-facing wording through the shared language helpers where needed. Language changes affect labels and validated display metadata, while existing forms, requests, selected answers and saved grades retain their canonical values.
+
+**Default title:** The built-in practice-test title is displayed in the selected language, and `createTest` submits that displayed default. A teacher's custom title remains their own text. Switching language does not change selected topics, class, difficulty or question count, and only pressing Create sends a generation request.
+
+## Lines 1–7: Code section
 
 ```tsx
 "use client";
+import { useLanguage } from "../../lib/i18n/LanguageProvider";
+
+
 import { backendApi } from "../../lib/backend-api";
 import { useEffect, useState } from "react";
+
 ```
 
 **Explanation:**
@@ -19,7 +28,7 @@ import { useEffect, useState } from "react";
 - Imports connect this file to the named helpers/components. Relative paths start from this file. React supplies hooks, next/link supplies client navigation, and project imports connect to the helpers/components named here.
 - Marks a client component so browser events and React state can be used. Initial HTML may still be server-rendered.
 
-## Lines 6–11: Topic
+## Lines 8–14: Topic
 
 ```tsx
 type Topic = {
@@ -28,13 +37,14 @@ type Topic = {
   owner: string;
   ready: boolean;
 };
+
 ```
 
 **Explanation:**
 
 - These TypeScript types specify fields. [] is a list, | null permits no value, and ? marks an optional property. These compile-time checks do not validate network JSON at runtime.
 
-## Lines 13–19: TestInfo
+## Lines 15–22: TestInfo
 
 ```tsx
 type TestInfo = {
@@ -44,13 +54,14 @@ type TestInfo = {
   question_count: number;
   topics: string[];
 };
+
 ```
 
 **Explanation:**
 
 - These TypeScript types specify fields. [] is a list, | null permits no value, and ? marks an optional property. These compile-time checks do not validate network JSON at runtime.
 
-## Lines 21–30: jsonRequest
+## Lines 23–34: jsonRequest
 
 ```tsx
 async function jsonRequest<T>(
@@ -63,16 +74,19 @@ async function jsonRequest<T>(
 
   return backendApi<T>(path, options);
 }
+
+
 ```
 
 **Explanation:**
 
 - `jsonRequest()`: Normalizes legacy /backend prefixes and delegates the actual authenticated request to backendApi.
 
-## Lines 33–43: TestCreator
+## Lines 35–47: TestCreator
 
 ```tsx
 export default function TestCreator() {
+  const { t, topic: topicLabel, errorText } = useLanguage();
   const [topics, setTopics] = useState<Topic[]>([]);
   const [selected, setSelected] = useState<string[]>(["binomial"]);
   const [classId, setClassId] = useState("");
@@ -83,6 +97,7 @@ export default function TestCreator() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
 ```
 
 **Explanation:**
@@ -98,7 +113,7 @@ export default function TestCreator() {
 - `message` stores the success/status text. The paired setter updates it and triggers rendering.
 - `error` stores the visible error message. The paired setter updates it and triggers rendering.
 
-## Lines 45–51: Code section
+## Lines 48–55: Code section
 
 ```tsx
   useEffect(() => {
@@ -108,6 +123,7 @@ export default function TestCreator() {
         setError("Cannot load topics. Check backend port 8000.")
       );
   }, []);
+
 ```
 
 **Explanation:**
@@ -115,7 +131,7 @@ export default function TestCreator() {
 - Runs after rendering. [] means mount; a dependency such as selected/testId reruns when that value changes.
 - then receives successful request data, catch records an error, and finally clears loading even after failure.
 
-## Lines 53–57: Code section
+## Lines 56–61: Code section
 
 ```tsx
   useEffect(() => {
@@ -123,6 +139,7 @@ export default function TestCreator() {
     load(); window.addEventListener("assessments-changed", load);
     return () => window.removeEventListener("assessments-changed", load);
   }, []);
+
 ```
 
 **Explanation:**
@@ -132,7 +149,7 @@ export default function TestCreator() {
 - The API paths in this section connect to FastAPI: `/api/classes`. backendApi attaches the access token before sending them.
 - then receives successful request data, catch records an error, and finally clears loading even after failure.
 
-## Lines 59–65: toggle
+## Lines 62–69: toggle
 
 ```tsx
   function toggle(topicId: string) {
@@ -142,6 +159,7 @@ export default function TestCreator() {
         : [...previous, topicId]
     );
   }
+
 ```
 
 **Explanation:**
@@ -149,7 +167,7 @@ export default function TestCreator() {
 - `toggle()`: Adds/removes a topic ID without changing other selected topics.
 - filter creates the displayed subset, such as tests in the chosen class, without changing the original list.
 
-## Lines 67–91: createTest
+## Lines 70–95: createTest
 
 ```tsx
   async function createTest() {
@@ -169,7 +187,7 @@ export default function TestCreator() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            title: title.trim(),
+            title: (title === "O/L Mathematics Practice Test" ? t(title) : title).trim(),
             class_id: classId.trim(),
             topic_ids: selected,
             questions_per_topic: count,
@@ -177,6 +195,7 @@ export default function TestCreator() {
           }),
         }
       );
+
 ```
 
 **Explanation:**
@@ -184,7 +203,7 @@ export default function TestCreator() {
 - `createTest()`: Sends the selected class/title/topics/count/difficulty to FastAPI and triggers a test-list reload after success.
 - Turns the request object into JSON text for the HTTP body.
 
-## Lines 93–102: Code section
+## Lines 96–105: Code section
 
 ```tsx
       setMessage(`Test created: ${created.title}`);
@@ -203,15 +222,15 @@ export default function TestCreator() {
 
 - A local browser event connects sibling teacher tools: creation dispatches it, listeners reload their lists, and cleanup removes listeners.
 
-## Lines 103–110: Code section
+## Lines 106–113: Code section
 
 ```tsx
     <section className="panel" style={{ marginBottom: 24 }}>
-      <div className="panel-kicker">Teacher Assessment Builder</div>
-      <h2>Create Mathematics Test</h2>
+      <div className="panel-kicker">{t("Teacher Assessment Builder")}</div>
+      <h2>{t("Create Mathematics Test")}</h2>
 
-      {error && <div className="alert">{error}</div>}
-      {message && <div className="alert soft">{message}</div>}
+      {error && <div className="alert">{errorText(error)}</div>}
+      {message && <div className="alert soft">{errorText(message)}</div>}
 
       <div className="form-grid">
 ```
@@ -219,15 +238,16 @@ export default function TestCreator() {
 **Explanation:**
 
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
-- Line 107: Renders an error message only when error contains text; an empty value produces no error panel.
+- Renders an error message only when error contains text; an empty value produces no error panel.
 
-## Lines 111–114: Code section
+## Lines 114–118: Code section
 
 ```tsx
         <label className="field">
-          <span>Class ID</span>
-          <select value={classId} onChange={e => setClassId(e.target.value)}><option value="">Select your class</option>{classes.map(c => <option key={c.class_id}>{c.class_id}</option>)}</select>
+          <span>{t("Class ID")}</span>
+          <select value={classId} onChange={e => setClassId(e.target.value)}><option value="">{t("Select your class")}</option>{classes.map(c => <option key={c.class_id}>{c.class_id}</option>)}</select>
         </label>
+
 ```
 
 **Explanation:**
@@ -236,20 +256,20 @@ export default function TestCreator() {
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 - map creates a visible item for each record/option. key gives React a stable identity when the list updates.
 
-## Lines 116–129: Code section
+## Lines 119–132: Code section
 
 ```tsx
         <label className="field">
-          <span>Test Title</span>
+          <span>{t("Test Title")}</span>
           <input
-            value={title}
+            value={title === "O/L Mathematics Practice Test" ? t(title) : title}
             maxLength={100}
             onChange={(e) => setTitle(e.target.value)}
           />
         </label>
       </div>
 
-      <h3>Select Mathematics Topics</h3>
+      <h3>{t("Select Mathematics Topics")}</h3>
 
       <div className="topic-choices">
         {topics.map((topic) => (
@@ -261,7 +281,7 @@ export default function TestCreator() {
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 - map creates a visible item for each record/option. key gives React a stable identity when the list updates.
 
-## Lines 130–148: Code section
+## Lines 133–151: Code section
 
 ```tsx
           <label className="topic-choice" key={topic.id}>
@@ -272,10 +292,10 @@ export default function TestCreator() {
               onChange={() => toggle(topic.id)}
             />
             <span>
-              {topic.name}
+              {topicLabel(topic.id)}
               <small>
                 {" "}({topic.owner}) —{" "}
-                {topic.ready ? "Ready" : "Coming soon"}
+                {t(topic.ready ? "Ready" : "Coming soon")}
               </small>
             </span>
           </label>
@@ -291,11 +311,11 @@ export default function TestCreator() {
 - Guards missing inputs, busy operations or already-submitted answers in the UI; server validation remains required.
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 149–158: Code section
+## Lines 152–162: Code section
 
 ```tsx
         <label className="field">
-          <span>Questions per Topic</span>
+          <span>{t("Questions per Topic")}</span>
           <input
             type="number"
             min={1}
@@ -304,6 +324,7 @@ export default function TestCreator() {
             onChange={(e) => setCount(Number(e.target.value))}
           />
         </label>
+
 ```
 
 **Explanation:**
@@ -311,21 +332,22 @@ export default function TestCreator() {
 - These are controlled inputs: value comes from state and onChange stores e.target.value back into that state.
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 160–171: Code section
+## Lines 163–175: Code section
 
 ```tsx
         <label className="field">
-          <span>Difficulty</span>
+          <span>{t("Difficulty")}</span>
           <select
             value={difficulty}
             onChange={(e) => setDifficulty(e.target.value)}
           >
-            <option value="easy">Easy</option>
-            <option value="medium">Medium</option>
-            <option value="hard">Hard</option>
+            <option value="easy">{t("Easy")}</option>
+            <option value="medium">{t("Medium")}</option>
+            <option value="hard">{t("Hard")}</option>
           </select>
         </label>
       </div>
+
 ```
 
 **Explanation:**
@@ -333,7 +355,7 @@ export default function TestCreator() {
 - These are controlled inputs: value comes from state and onChange stores e.target.value back into that state.
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 173–189: Code section
+## Lines 176–192: Code section
 
 ```tsx
       <button
@@ -347,7 +369,7 @@ export default function TestCreator() {
           count > 10
         }
       >
-        {busy ? "Working..." : "Generate Test"}
+        {t(busy ? "Working..." : "Generate Test")}
       </button>
 
     </section>

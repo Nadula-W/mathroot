@@ -1,5 +1,7 @@
-
 "use client";
+import { useLanguage } from "../../lib/i18n/LanguageProvider";
+
+
 
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
@@ -9,6 +11,7 @@ import { createClient } from "../../lib/supabase/client";
 type AccountType = "student" | "teacher";
 
 export default function RegisterPage() {
+  const { t, errorText, validateInput, clearValidation } = useLanguage();
   const router = useRouter();
   const supabase = createClient();
 
@@ -93,43 +96,39 @@ export default function RegisterPage() {
       </header>
 
       <section className="section-head">
-        <div className="eyebrow">
-          ACCOUNT REGISTRATION
-        </div>
-        <h1>Create Your Account</h1>
-        <p>
-          Join MathRoot AI for Sri Lankan O/L Mathematics.
-        </p>
+        <div className="eyebrow">{t("ACCOUNT REGISTRATION")}</div>
+        <h1>{t("Create Your Account")}</h1>
+        <p>{t("Join MathRoot AI for Sri Lankan O/L Mathematics.")}</p>
       </section>
 
       <section className="panel narrow">
-        <form onSubmit={register}>
+        <form onSubmit={register} onInvalid={validateInput} onInput={clearValidation}>
           <label className="field">
-            <span>Account Type</span>
+            <span>{t("Account Type")}</span>
             <select
               value={role}
               onChange={(e) =>
                 setRole(e.target.value as AccountType)
               }
             >
-              <option value="student">Student</option>
-              <option value="teacher">Teacher</option>
+              <option value="student">{t("Student")}</option>
+              <option value="teacher">{t("Teacher")}</option>
             </select>
           </label>
 
           <label className="field">
-            <span>Full Name</span>
+            <span>{t("Full Name")}</span>
             <input
               required
               maxLength={100}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Enter your full name"
+              placeholder={t("Enter your full name")}
             />
           </label>
 
           <label className="field">
-            <span>Email Address</span>
+            <span>{t("Email Address")}</span>
             <input
               type="email"
               required
@@ -140,7 +139,7 @@ export default function RegisterPage() {
           </label>
 
           <label className="field">
-            <span>Password</span>
+            <span>{t("Password")}</span>
             <input
               type="password"
               required
@@ -151,7 +150,7 @@ export default function RegisterPage() {
           </label>
 
           <label className="field">
-            <span>Confirm Password</span>
+            <span>{t("Confirm Password")}</span>
             <input
               type="password"
               required
@@ -164,20 +163,19 @@ export default function RegisterPage() {
 
           {role === "teacher" && (
             <p className="helper">
-              Teacher accounts require administrator
-              approval before accessing class results.
+              {t("Teacher accounts require administrator approval before accessing class results.")}
             </p>
           )}
 
           {error && (
             <div className="alert" role="alert">
-              {error}
+              {errorText(error)}
             </div>
           )}
 
           {success && (
             <div className="alert soft" role="status">
-              {success}
+              {t(success)}
             </div>
           )}
 
@@ -186,13 +184,13 @@ export default function RegisterPage() {
             className="button primary full"
             disabled={loading}
           >
-            {loading ? "Creating account..." : "Register"}
+            {t(loading ? "Creating account..." : "Register")}
           </button>
         </form>
 
         <p className="helper">
-          Already have an account?{" "}
-          <Link href="/login">Log in</Link>
+          {t("Already have an account?")}{" "}
+          <Link href="/login">{t("Log In")}</Link>
         </p>
       </section>
     </main>

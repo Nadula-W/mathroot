@@ -6,10 +6,15 @@
 
 Read the code blocks in order. Each block contains the actual source and an explanation immediately below it. Line numbers match the source snapshot used here. Closing brackets and repeated markup are explained with their surrounding block.
 
-## Lines 1–4: Code section
+
+**Bilingual update:** This module now renders user-facing wording through the shared language helpers where needed. Language changes affect labels and validated display metadata, while existing forms, requests, selected answers and saved grades retain their canonical values.
+
+## Lines 1–6: Code section
 
 ```tsx
 "use client";
+import { useLanguage } from "../../lib/i18n/LanguageProvider";
+
 import ClassManager from "./ClassManager";
 import TestCreator from "./TestCreator";
 import TestManager from "./TestManager";
@@ -20,7 +25,7 @@ import TestManager from "./TestManager";
 - Imports connect this file to the named helpers/components. Relative paths start from this file. React supplies hooks, next/link supplies client navigation, and project imports connect to the helpers/components named here.
 - Marks a client component so browser events and React state can be used. Initial HTML may still be server-rendered.
 
-## Lines 5–5: TeacherPage
+## Lines 7–7: TeacherPage
 
 ```tsx
 export default function TeacherPage() {
@@ -30,10 +35,11 @@ export default function TeacherPage() {
 
 - This section supplies the surrounding function/component's fixed fields, messages or structure. Closing brackets complete the earlier object/call/markup; they do not make a separate request.
 
-## Lines 6–7: Code section
+## Lines 8–10: Code section
 
 ```tsx
-  return <main className="shell teacher-shell"><section className="section-head"><div className="eyebrow">TEACHER WORKSPACE</div><h1>From answers to teaching actions.</h1><p>Create Mathematics tests and review your students’ progress.</p></section><ClassManager /><TestCreator /><TestManager /></main>;
+  const { t } = useLanguage();
+  return <main className="shell teacher-shell"><section className="section-head"><div className="eyebrow">{t("TEACHER WORKSPACE")}</div><h1>{t("From answers to teaching actions.")}</h1><p>{t("Create Mathematics tests and review your students\u2019 progress.")}</p></section><ClassManager /><TestCreator /><TestManager /></main>;
 }
 ```
 

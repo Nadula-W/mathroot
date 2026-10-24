@@ -6,16 +6,24 @@
 
 Read the code blocks in order. Each block contains the actual source and an explanation immediately below it. Line numbers match the source snapshot used here. Closing brackets and repeated markup are explained with their surrounding block.
 
-## Lines 2–8: Code section
+
+**Bilingual update:** This module now renders user-facing wording through the shared language helpers where needed. Language changes affect labels and validated display metadata, while existing forms, requests, selected answers and saved grades retain their canonical values.
+
+## Lines 1–12: Code section
 
 ```tsx
 "use client";
+import { TranslationWarning, useLanguage } from "../../../../lib/i18n/LanguageProvider";
+import type { Translatable } from "../../../../lib/i18n/core";
+
+
 
 import { backendApi } from "../../../../lib/backend-api";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import AssessmentReview, { SavedResult } from "../../../components/AssessmentReview";
+
 ```
 
 **Explanation:**
@@ -23,26 +31,27 @@ import AssessmentReview, { SavedResult } from "../../../components/AssessmentRev
 - Imports connect this file to the named helpers/components. Relative paths start from this file. React supplies hooks, next/link supplies client navigation, and project imports connect to the helpers/components named here.
 - Marks a client component so browser events and React state can be used. Initial HTML may still be server-rendered.
 
-## Lines 10–19: Question
+## Lines 13–23: Question
 
 ```tsx
-type Question = {
+type Question = Translatable & {
   question_id: string;
   topic_id: string;
   difficulty: string;
   statement: string;
-  options: {
+  options: (Translatable & {
     id: string;
     text: string;
-  }[];
+  })[];
 };
+
 ```
 
 **Explanation:**
 
 - These TypeScript types specify fields. [] is a list, | null permits no value, and ? marks an optional property. These compile-time checks do not validate network JSON at runtime.
 
-## Lines 21–28: Test
+## Lines 24–32: Test
 
 ```tsx
 type Test = {
@@ -53,16 +62,17 @@ type Test = {
   topics: string[];
   questions: Question[];
 };
+
 ```
 
 **Explanation:**
 
 - These TypeScript types specify fields. [] is a list, | null permits no value, and ? marks an optional property. These compile-time checks do not validate network JSON at runtime.
 
-## Lines 30–40: Answer
+## Lines 33–44: Answer
 
 ```tsx
-type Answer = {
+type Answer = Translatable & {
   correct: boolean;
   feedback: string;
   correct_answer: string;
@@ -73,16 +83,18 @@ type Answer = {
   explanation?: string;
   corrective_guidance?: string;
 };
+
 ```
 
 **Explanation:**
 
 - These TypeScript types specify fields. [] is a list, | null permits no value, and ? marks an optional property. These compile-time checks do not validate network JSON at runtime.
 
-## Lines 42–58: AssignedTestPage
+## Lines 45–62: AssignedTestPage
 
 ```tsx
 export default function AssignedTestPage() {
+  const { t, topic, content, errorText } = useLanguage();
   const { testId } = useParams<{ testId: string }>();
 
   const [test, setTest] = useState<Test | null>(null);
@@ -113,7 +125,7 @@ export default function AssignedTestPage() {
 - `busy` stores whether an operation is in progress. The paired setter updates it and triggers rendering.
 - `error` stores the visible error message. The paired setter updates it and triggers rendering.
 
-## Lines 59–66: Code section
+## Lines 63–71: Code section
 
 ```tsx
   useEffect(() => {
@@ -124,13 +136,14 @@ export default function AssignedTestPage() {
     }
 
     let active = true;
+
 ```
 
 **Explanation:**
 
 - Runs after rendering. [] means mount; a dependency such as selected/testId reruns when that value changes.
 
-## Lines 68–92: loadTest
+## Lines 72–97: loadTest
 
 ```tsx
     async function loadTest() {
@@ -158,6 +171,7 @@ export default function AssignedTestPage() {
         setStarted(progress.answers.length > 0);
       } catch (err) {
         if (!active) return;
+
 ```
 
 **Explanation:**
@@ -166,11 +180,11 @@ export default function AssignedTestPage() {
 - Starts independent requests together and returns their results in the order supplied.
 - Searches for the first unanswered question using saved answers. -1 means none remain, so the index is moved past the last question.
 - try attempts the operation; catch/except handles failure. finally, where present, performs cleanup even when an error occurs.
-- Line 89: Uses the unanswered question position; when findIndex returned -1, sets the position to the question count to show completion.
-- Line 90: Previously saved answers skip a fresh-start introduction so the user can resume.
+- Uses the unanswered question position; when findIndex returned -1, sets the position to the question count to show completion.
+- Previously saved answers skip a fresh-start introduction so the user can resume.
 - The API paths in this section connect to FastAPI: `/api/tests/`. backendApi attaches the access token before sending them.
 
-## Lines 94–114: Code section
+## Lines 98–118: Code section
 
 ```tsx
         setError(
@@ -200,7 +214,7 @@ export default function AssignedTestPage() {
 
 - Cleanup switches off active so late responses cannot update a page after navigation or an older class selection.
 
-## Lines 115–139: submit
+## Lines 119–144: submit
 
 ```tsx
   async function submit() {
@@ -228,16 +242,17 @@ export default function AssignedTestPage() {
           }),
         }
       );
+
 ```
 
 **Explanation:**
 
 - `submit()`: Guards missing/repeated actions, posts question/option IDs, reloads saved progress and shows backend feedback. It does not send a student ID or decide the grade.
 - Turns the request object into JSON text for the HTTP body.
-- Line 116: Rejects a submit attempt when data/selection is absent, a request is pending or this question already has displayed feedback.
+- Rejects a submit attempt when data/selection is absent, a request is pending or this question already has displayed feedback.
 - The API paths in this section connect to FastAPI: `/api/tests/`. backendApi attaches the access token before sending them.
 
-## Lines 141–156: Code section
+## Lines 145–161: Code section
 
 ```tsx
       // Student ID is NOT sent.
@@ -256,14 +271,15 @@ export default function AssignedTestPage() {
       setBusy(false);
     }
   }
+
 ```
 
 **Explanation:**
 
-- Line 145: Reloads saved progress after submission; scores and resume position come from persisted answers, not a local counter.
+- Reloads saved progress after submission; scores and resume position come from persisted answers, not a local counter.
 - The API paths in this section connect to FastAPI: `/api/tests/`. backendApi attaches the access token before sending them.
 
-## Lines 158–177: advance
+## Lines 162–182: advance
 
 ```tsx
   function advance() {
@@ -286,6 +302,7 @@ export default function AssignedTestPage() {
 
   return (
     <main className="shell student-shell">
+
 ```
 
 **Explanation:**
@@ -293,28 +310,26 @@ export default function AssignedTestPage() {
 - `advance()`: Finds the next question missing from saved answers, then clears local option/feedback. It never increments a local score.
 - Searches for the first unanswered question using saved answers. -1 means none remain, so the index is moved past the last question.
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
-- Line 162: Uses the unanswered question position; when findIndex returned -1, sets the position to the question count to show completion.
-- Line 169: Converts test existence to a boolean and checks whether the position is past the final question.
+- Uses the unanswered question position; when findIndex returned -1, sets the position to the question count to show completion.
+- Converts test existence to a boolean and checks whether the position is past the final question.
 
-## Lines 179–204: Code section
+## Lines 183–207: Code section
 
 ```tsx
       <section className="section-head">
-        <div className="eyebrow">
-          ASSIGNED MATHEMATICS TEST
-        </div>
+        <div className="eyebrow">{t("ASSIGNED MATHEMATICS TEST")}</div>
 
         <h1>
           {loading
-            ? "Loading test..."
-            : test?.title || "Unable to load test"}
+            ? t("Loading test...")
+            : test?.title || t("Unable to load test")}
         </h1>
 
         {test && (
           <p>
-            Class: {test.class_id}
+            {t("Class:")} {test.class_id}
             {" · "}
-            {test.question_count} questions
+            {t("{count} questions", { count: test.question_count })}
           </p>
         )}
       </section>
@@ -322,16 +337,17 @@ export default function AssignedTestPage() {
       {/* Display API errors */}
       {error && (
         <div className="alert" role="alert">
-          {error}
+          {errorText(error)}
         </div>
       )}
+
 ```
 
 **Explanation:**
 
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 206–207: Code section
+## Lines 208–209: Code section
 
 ```tsx
       {/* Loading state */}
@@ -342,11 +358,11 @@ export default function AssignedTestPage() {
 
 - This section supplies the surrounding function/component's fixed fields, messages or structure. Closing brackets complete the earlier object/call/markup; they do not make a separate request.
 
-## Lines 208–214: Code section
+## Lines 210–216: Code section
 
 ```tsx
         <section className="panel narrow">
-          <p>Loading your assigned Mathematics test...</p>
+          <p>{t("Loading your assigned Mathematics test...")}</p>
         </section>
       )}
 
@@ -358,21 +374,18 @@ export default function AssignedTestPage() {
 
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 215–231: Code section
+## Lines 217–230: Code section
 
 ```tsx
         <section className="panel narrow">
           <p>
-            Make sure you are logged in and have joined
-            your teacher's class.
+            {t("Make sure you are logged in and have joined your teacher's class.")}
           </p>
 
           <Link
             href="/student"
             className="button primary full"
-          >
-            Back to My Tests
-          </Link>
+          >{t("Back to My Tests")}</Link>
         </section>
       )}
 
@@ -384,53 +397,51 @@ export default function AssignedTestPage() {
 
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 232–255: Code section
+## Lines 231–252: Code section
 
 ```tsx
         <section className="panel narrow">
-          <h2>Ready to Start?</h2>
+          <h2>{t("Ready to Start?")}</h2>
 
-          <p>
-            You are about to begin:
-          </p>
+          <p>{t("You are about to begin:")}</p>
 
           <h3>{test.title}</h3>
 
-          <p>
-            Class: <strong>{test.class_id}</strong>
+          <p>{t("Class:")}<strong>{test.class_id}</strong>
           </p>
 
           <p>
-            Total Questions:{" "}
+            {t("Total Questions:")}{" "}
             <strong>{test.question_count}</strong>
           </p>
 
           <p>
-            Topics:{" "}
+            {t("Topics:")}{" "}
             <strong>
-              {test.topics?.join(", ") || "Mathematics"}
+              {test.topics?.map(topic).join(", ") || t("Mathematics")}
             </strong>
           </p>
+
 ```
 
 **Explanation:**
 
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 257–260: Code section
+## Lines 253–256: Code section
 
 ```tsx
           <p className="helper">
-            Your answers will be saved automatically
-            under your logged-in student account.
+            {t("Your answers will be saved automatically under your logged-in student account.")}
           </p>
+
 ```
 
 **Explanation:**
 
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 262–282: Code section
+## Lines 257–274: Code section
 
 ```tsx
           <button
@@ -441,13 +452,10 @@ export default function AssignedTestPage() {
               setStarted(true);
               setError("");
             }}
-          >
-            Start Test
-          </button>
+          >{t("Start Test")}</button>
 
           <p className="helper">
-            Each answer can be submitted only once.
-            Refreshing resumes from your saved answers.
+            {t("Each answer can be submitted only once. Refreshing resumes from your saved answers.")}
           </p>
         </section>
       )}
@@ -462,25 +470,25 @@ export default function AssignedTestPage() {
 - Guards missing inputs, busy operations or already-submitted answers in the UI; server validation remains required.
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 283–301: Code section
+## Lines 275–293: Code section
 
 ```tsx
         <section className="panel assessment-panel">
           <div className="progress-row">
             <strong>
-              Question {index + 1} of{" "}
-              {test?.question_count}
+              {t("Question {number} of {total}", { number: index + 1, total: test?.question_count ?? 0 })}
             </strong>
 
             <span className="difficulty">
-              {question.topic_id}
+              {topic(question.topic_id)}
               {" · "}
-              {question.difficulty}
+              {t(question.difficulty === "easy" ? "Easy" : question.difficulty === "medium" ? "Medium" : "Hard")}
             </span>
           </div>
 
           <div className="question-area">
-            <h2>{question.statement}</h2>
+            <h2>{content(question, "statement")}</h2>
+            <TranslationWarning record={question} fields={["statement"]} />
           </div>
 
           {/* Answer options */}
@@ -490,7 +498,7 @@ export default function AssignedTestPage() {
 
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 302–303: Code section
+## Lines 294–295: Code section
 
 ```tsx
           <div className="options">
@@ -502,7 +510,7 @@ export default function AssignedTestPage() {
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 - map creates a visible item for each record/option. key gives React a stable identity when the list updates.
 
-## Lines 304–327: Code section
+## Lines 296–320: Code section
 
 ```tsx
               <button
@@ -521,7 +529,8 @@ export default function AssignedTestPage() {
                 </span>
 
                 <span className="option-text">
-                  {option.text}
+                  {content(option, "text")}
+                  <TranslationWarning record={option} fields={["text"]} />
                 </span>
               </button>
             ))}
@@ -537,7 +546,7 @@ export default function AssignedTestPage() {
 - Guards missing inputs, busy operations or already-submitted answers in the UI; server validation remains required.
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 328–339: Code section
+## Lines 321–332: Code section
 
 ```tsx
             <button
@@ -546,9 +555,9 @@ export default function AssignedTestPage() {
               disabled={!selected || busy}
               onClick={submit}
             >
-              {busy
+              {t(busy
                 ? "Saving Answer..."
-                : "Submit Answer"}
+                : "Submit Answer")}
             </button>
           ) : (
             /* AI / Rule-based feedback */
@@ -560,41 +569,43 @@ export default function AssignedTestPage() {
 - Guards missing inputs, busy operations or already-submitted answers in the UI; server validation remains required.
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 340–364: Code section
+## Lines 333–359: Code section
 
 ```tsx
             <div className="feedback-box review">
               <strong>
-                {feedback.correct
+                {t(feedback.correct
                   ? "Correct!"
-                  : "Review your answer"}
+                  : "Review your answer")}
               </strong>
 
-              <p>{feedback.feedback}</p>
-              {feedback.explanation && !feedback.feedback.includes(feedback.explanation) && <p>{feedback.explanation}</p>}
-              {feedback.corrective_guidance && <p>Learning tip: {feedback.corrective_guidance}</p>}
+              <p>{content(feedback, "feedback")}</p>
+              {feedback.explanation && !content(feedback, "feedback").includes(content(feedback, "explanation")) && <p>{content(feedback, "explanation")}</p>}
+              {feedback.corrective_guidance && <p>{t("Learning tip:")} {content(feedback, "corrective_guidance")}</p>}
+              <TranslationWarning record={feedback} />
 
               {!feedback.correct && (
                 <p>
-                  Correct answer:{" "}
-                  {feedback.correct_answer}
+                  {t("Correct answer:")}{" "}
+                  {content(feedback, "correct_answer")}
                 </p>
               )}
 
               {!feedback.correct &&
                 feedback.suspected_misconception && (
                   <p className="helper">
-                    Possible misconception:{" "}
-                    {feedback.suspected_misconception}
+                    {t("Possible misconception:")}{" "}
+                    {t(feedback.suspected_misconception)}
                   </p>
                 )}
+
 ```
 
 **Explanation:**
 
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 366–381: Code section
+## Lines 360–375: Code section
 
 ```tsx
               <button
@@ -602,9 +613,9 @@ export default function AssignedTestPage() {
                 className="button primary full"
                 onClick={advance}
               >
-                {index + 1 === test?.question_count
+                {t(index + 1 === test?.question_count
                   ? "Finish Test"
-                  : "Next Question"}
+                  : "Next Question")}
               </button>
             </div>
           )}
@@ -620,39 +631,33 @@ export default function AssignedTestPage() {
 - Connects the click to the named handler. The request is made by that handler, not just by rendering the button.
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 382–396: Code section
+## Lines 376–386: Code section
 
 ```tsx
         <section className="panel narrow finished">
-          <h2>Test Completed!</h2>
+          <h2>{t("Test Completed!")}</h2>
 
           <p>
-            You answered{" "}
-            <strong>{saved?.correct ?? 0}</strong> of{" "}
-            <strong>{test.question_count}</strong>{" "}
-            questions correctly.
+            {t("You answered {correct} of {total} questions correctly.", { correct: saved?.correct ?? 0, total: test.question_count })}
           </p>
 
           <p>
-            Your answers have been saved in Supabase.
-            Your teacher can view your results from
-            the teacher dashboard.
+            {t("Your answers have been saved. Your teacher can view your results from the teacher dashboard.")}
           </p>
+
 ```
 
 **Explanation:**
 
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 398–409: Code section
+## Lines 387–396: Code section
 
 ```tsx
           <Link
             href="/student"
             className="button primary full"
-          >
-            Back to My Tests
-          </Link>
+          >{t("Back to My Tests")}</Link>
         </section>
       )}
       {started && complete && saved && <AssessmentReview result={saved} />}

@@ -53,3 +53,18 @@ class TopicFeedbackProvider:
             # Caught by the shared service; no network request is made.
             raise RuntimeError("Topic configured for manual feedback.")
         return analyze_answer(context)
+
+
+class TopicTranslationProvider:
+    """Optional Sinhala translation using this topic's provider configuration."""
+    def translate(self, text: str) -> str:
+        # TODO: Read configuration() and translate the masked prose to Sinhala.
+        # Preserve each [[MATH_n]] placeholder exactly once in the same order.
+        # Return the translated string, with a finite network timeout. Do not
+        # translate or solve the hidden mathematics and do not send identities.
+        # You may use Ollama, Gemini, OpenRouter, another API, or remain manual.
+        # The shared presentation service additionally requires this topic's
+        # validate_translation hook to approve the meaning before display.
+        if configuration()["mode"] == "manual":
+            raise RuntimeError("Topic configured for manual translation.")
+        raise NotImplementedError("Choose and implement this topic's translation provider.")

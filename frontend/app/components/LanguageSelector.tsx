@@ -1,28 +1,16 @@
 "use client";
-
-import { useEffect, useState } from "react";
+import { useLanguage } from "../../lib/i18n/LanguageProvider";
 
 export default function LanguageSelector() {
-  const [language, setLanguage] = useState("en");
-
-  useEffect(() => {
-    try {
-      if (localStorage.getItem("mathroot.language") === "si") setLanguage("si");
-    } catch { /* The selector still works when browser storage is disabled. */ }
-  }, []);
-
-  function changeLanguage(value: string) {
-    setLanguage(value);
-    try { localStorage.setItem("mathroot.language", value); } catch { /* Optional persistence. */ }
-  }
+  const { language, setLanguage, t } = useLanguage();
 
   return (
     <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14 }}>
-      Language / භාෂාව
+      {t("Language")}
       <select
         aria-label="Language / භාෂාව"
         value={language}
-        onChange={event => changeLanguage(event.target.value)}
+        onChange={event => setLanguage(event.target.value === "si" ? "si" : "en")}
         style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #e0e6df", background: "white", font: "inherit" }}
       >
         <option value="en">English</option>

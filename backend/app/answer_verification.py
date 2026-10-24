@@ -8,7 +8,6 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from app.contracts import InternalQuestion
-from app.topics.development.binomial.generator import OLLAMA_URL, selected_model
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -46,6 +45,10 @@ def setting(name: str, default: float, low: float, high: float) -> float:
 
 class OllamaFeedbackProvider:
     def analyze(self, context: dict) -> Analysis:
+        # Resolve the default provider only when used. Topic-owned providers may
+        # import Analysis while the topic registry is still being initialized.
+        from app.topics.development.binomial.generator import OLLAMA_URL, selected_model
+
         # Only question content is sent: no user IDs, names, sessions or database keys.
         payload = {
             "model": os.getenv("MATHROOT_ANSWER_MODEL") or selected_model(),

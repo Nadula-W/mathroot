@@ -37,6 +37,14 @@ The current question interface displays the accepted conceptual feedback, canoni
 
 ## Extension and limits
 
+### English and Sinhala presentation
+
+The grading and approved-wording checks described above remain canonical and unchanged. `app.presentation` runs after verification when building a response, adding optional `translations.si` display fields and `translation_warnings`. It does not accept a second answer key, modify saved snapshots or relax `Analysis` validation to admit arbitrary translated feedback. The Binomial presentation module recognizes reviewed explanation/feedback forms, including saved historical forms, and supplies manual Sinhala wording without contacting Ollama.
+
+The language selector changes only presentation. Student feedback, saved reviews and teacher recommendations use the same verified result in either language. Unknown historical/free-form wording is retained in English and marked missing if a reviewed template or validated optional translation is unavailable. Existing marks, misconception codes, question/option IDs and completion dates remain intact.
+
+Optional topic translation providers are independent of the answer-analysis provider. They can assist with additional prose after mathematical-token checks and cache reuse, but they cannot choose correctness or bypass the approved explanation list. See [topic contracts](TOPIC_CONTRACT.md) and the [backend source index](backend/SOURCE_INDEX.md) for the hooks and helpers. No database migration or new dependency is required for bilingual display.
+
 See TOPIC_CONTRACT.md for the optional topic hook, stable misconception definitions and provider adapter interface. The current three Binomial distractors support three error categories. Additional categories have reserved codes and teaching recommendations but require diagnostic question variants before they can be inferred. No unrestricted AI diagnosis is permitted.
 
 The bounded `app.safe_symbolic` helper prepares future free-text adapters without executing Python input. It accepts explicit arithmetic and declared variables only. Domain restrictions and topic-specific rules must be checked by those future adapters. Current routes remain MCQ-only.
@@ -59,6 +67,10 @@ npm run build
 ```
 
 ## Verification recorded
+
+The checks below are the recorded results of the earlier answer-verification feature. They are not evidence of a fresh live Supabase/Ollama run for the bilingual feature. Current bilingual automated checks and manual acceptance instructions are documented in the frontend/backend guides; live success must be reported separately when actually exercised.
+
+For the bilingual implementation, the full backend suite passed 103 tests, the six frontend language tests and TypeScript checks passed, and the production build passed. A production Chrome smoke verified switching/persistence/navigation, translated public/auth pages, native validation wording, document language, one selector and mobile width without observed hydration errors. Live Supabase assessment writes and real Ollama inference were not repeated. These results supplement, rather than repeat, the earlier live checks listed below.
 
 - 47 automated backend tests passed. Coverage includes mocked AI success for correct/incorrect choices, distributive and sign mistakes, incorrect AI grades, low confidence, hallucinated feedback/diagnoses, invalid JSON, absent models, service exceptions, timeouts, manual mode, saved snapshot replay and legacy review. Existing tests cover role/membership authorization, cross-student privacy, duplicate insert races, scores and teacher aggregation/deletion. Safe symbolic parsing has malicious-input and equivalence tests.
 - TypeScript and the Next.js production build passed.

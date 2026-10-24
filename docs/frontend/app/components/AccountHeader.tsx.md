@@ -6,15 +6,22 @@
 
 Read the code blocks in order. Each block contains the actual source and an explanation immediately below it. Line numbers match the source snapshot used here. Closing brackets and repeated markup are explained with their surrounding block.
 
-## Lines 2–7: Code section
+
+**Bilingual update:** This module now renders user-facing wording through the shared language helpers where needed. Language changes affect labels and validated display metadata, while existing forms, requests, selected answers and saved grades retain their canonical values.
+
+## Lines 1–10: Code section
 
 ```tsx
 "use client";
+import { useLanguage } from "../../lib/i18n/LanguageProvider";
+
+
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createClient } from "../../lib/supabase/client";
+
 ```
 
 **Explanation:**
@@ -22,7 +29,7 @@ import { createClient } from "../../lib/supabase/client";
 - Imports connect this file to the named helpers/components. Relative paths start from this file. React supplies hooks, next/link supplies client navigation, and project imports connect to the helpers/components named here.
 - Marks a client component so browser events and React state can be used. Initial HTML may still be server-rendered.
 
-## Lines 9–18: AccountHeader
+## Lines 11–23: AccountHeader
 
 ```tsx
 export default function AccountHeader({
@@ -32,9 +39,12 @@ export default function AccountHeader({
   name: string;
   role: "student" | "teacher";
 }) {
+
+  const { t, errorText } = useLanguage();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
   const [error, setError] = useState("");
+
 ```
 
 **Explanation:**
@@ -42,7 +52,7 @@ export default function AccountHeader({
 - `loggingOut` stores the sign-out waiting flag. The paired setter updates it and triggers rendering.
 - `error` stores the visible error message. The paired setter updates it and triggers rendering.
 
-## Lines 20–39: logout
+## Lines 24–43: logout
 
 ```tsx
   async function logout() {
@@ -72,7 +82,7 @@ export default function AccountHeader({
 - `logout()`: Signs out and returns to login. The shared header handles sign-out errors and disables repeated clicks while waiting.
 - Changes the workspace URL without keeping the previous page in history. API permission checks still happen in Python.
 
-## Lines 40–60: Code section
+## Lines 44–63: Code section
 
 ```tsx
     <header className="mr-account-header">
@@ -82,27 +92,26 @@ export default function AccountHeader({
         </Link>
         <span className="mr-account-section">
           {role === "teacher"
-            ? "Teacher Workspace"
-            : "Student Workspace"}
+            ? t("Teacher Workspace")
+            : t("Student Workspace")}
         </span>
       </div>
 
       <div className="mr-account-right">
         <div className="mr-account-user">
-          <span className="mr-account-greeting">
-            Hi, {name}
-          </span>
+          <span className="mr-account-greeting">{t("Hi, {name}", { name })}</span>
           <span className="mr-account-role">
-            {role === "teacher" ? "Teacher" : "Student"}
+            {t(role === "teacher" ? "Teacher" : "Student")}
           </span>
         </div>
+
 ```
 
 **Explanation:**
 
 - JSX describes the screen. className selects CSS; {...} embeds JavaScript values/conditions. Text between tags is displayed to the user.
 
-## Lines 62–79: Code section
+## Lines 64–81: Code section
 
 ```tsx
         <button
@@ -111,13 +120,13 @@ export default function AccountHeader({
           onClick={logout}
           disabled={loggingOut}
         >
-          {loggingOut ? "Logging out..." : "Log out"}
+          {t(loggingOut ? "Logging out..." : "Log out")}
         </button>
       </div>
 
       {error && (
         <p className="mr-account-error" role="alert">
-          {error}
+          {errorText(error)}
         </p>
       )}
     </header>

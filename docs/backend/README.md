@@ -17,6 +17,7 @@ Paths below are relative to `backend/`.
 | [app/supabase_auth.py](../../backend/app/supabase_auth.py) | `current_user()` verifies the bearer token with Supabase and loads the profile. `require_teacher()` and `require_student()` restrict roles. `public_client()` handles token verification; `admin_client()` uses the backend-only secret for database operations. Clients are cached for reuse, and `client_options()` configures pooled HTTP/1.1 connections. |
 | [app/assessments.py](../../backend/app/assessments.py) | Main class/test/result routes, request models and authorization helpers. It connects authentication, topic modules, verification and database persistence. Details below. |
 | [app/answer_verification.py](../../backend/app/answer_verification.py) | Shared answer grading and AI/manual feedback. It does not generate questions. Details below. |
+| [app/presentation.py](../../backend/app/presentation.py) | Adds Sinhala presentation metadata using reviewed topic wording first and optional guarded translation for unknown prose. It does not alter question identities, grades or stored records. |
 | [app/safe_symbolic.py](../../backend/app/safe_symbolic.py) | `parse_math()` accepts a small, bounded arithmetic syntax and builds SymPy objects. Its inner `convert()` rejects unsupported syntax. `equivalent()` compares expressions using `cancel`. Prepared for future free-text answers; current MCQ submissions do not call it. |
 | [app/topics/base.py](../../backend/app/topics/base.py) | `TopicModule` describes the common methods: generate a question, return student feedback, and recommend a teaching action. A Python `Protocol` describes expected methods without forcing inheritance. |
 | [app/topics/__init__.py](../../backend/app/topics/__init__.py) | `TOPICS` maps ready topic IDs to generator objects. `PLANNED_TOPICS` supplies display names, owners and readiness. Only Binomial is registered and ready. |
@@ -74,6 +75,7 @@ In [answer_verification.py](../../backend/app/answer_verification.py):
 | --- | --- |
 | [binomial/manual.py](../../backend/app/topics/development/binomial/manual.py) | `_as_text()` formats algebra. `BinomialTopic.generate_question()` chooses coefficients, calculates the answer with SymPy, constructs diagnostic wrong answers, checks uniqueness/equivalence and assigns opaque UUIDs. `feedback()` explains a possible mistake; `teaching_recommendation()` suggests practice; `verification_feedback()` supplies trusted alternative feedback for shared AI selection. |
 | [binomial/generator.py](../../backend/app/topics/development/binomial/generator.py) | `generator_mode()` reads auto/manual mode, `selected_model()` chooses the local model, and `llm_status()` checks availability. `LLMBinomialTopic` extends the manual class. Its `generate_question()` tries `_generate_using_ollama()` and falls back on failure. Ollama proposes integer coefficients; Python/SymPy computes and verifies the answers independently. |
+| [binomial/presentation.py](../../backend/app/topics/development/binomial/presentation.py) | Reviewed Sinhala instructions, worked explanations, misconception feedback and teaching guidance. Recognizes known canonical wording and preserves mathematical text exactly, including supported historical Binomial records. |
 | [binomial/__init__.py](../../backend/app/topics/development/binomial/__init__.py) | Exposes the manual class/helper from this package. It contains no grading logic. |
 
 Example: for `3(x + 4)`, the correct result is `3x + 12`. Selecting `3x + 4` may indicate `DISTRIBUTION_CONSTANT`: the constant was not multiplied. That is evidence of a possible misconception, not proof about the student's thinking.
@@ -129,6 +131,8 @@ The existing assessment tables use RLS with no browser grants; the privileged ba
 | [tests/test_assessments.py](../../backend/tests/test_assessments.py) | Tests enrollment, persistence, resume, scores, duplicate races, roles, ownership and deletion. `seed`, `enroll` and `teacher` prepare test scenarios. |
 | [tests/test_answer_verification.py](../../backend/tests/test_answer_verification.py) | Uses `GroundedProvider` and mocked HTTP responses to test AI success, rejection, fallback, snapshots, custom providers and safe symbolic parsing. |
 | [tests/test_network_errors.py](../../backend/tests/test_network_errors.py) | Checks HTTP/1.1 configuration and readable 503 responses for network failures. |
+| [tests/test_bilingual_assessments.py](../../backend/tests/test_bilingual_assessments.py) | Uses the existing fake database to check bilingual response metadata, unchanged IDs/options/grades, manual and mocked-AI feedback, legacy reviews, teacher recommendations and topic readiness. |
+| [tests/test_presentation.py](../../backend/tests/test_presentation.py) | Focused template and hybrid-translation checks: preserved notation/IDs, manual and grounded AI feedback, malformed/unsafe output, semantic rejection, caching/budgets, topic provider freedom and mocked Ollama schema/timeouts. |
 | [scripts/verify_assessments.py](../../backend/scripts/verify_assessments.py) | Optional live integration check. `account()` creates disposable users, `ok()` checks responses, and `main()` runs the workflow and cleans up its own records. Unlike unit tests, it needs live services. |
 | [requirements.txt](../../backend/requirements.txt) | Declares backend dependencies. The code also imports `supabase` and `python-dotenv`; these are installed in the current environment but are not listed in this file yet. |
 
@@ -150,5 +154,41 @@ Remember these distinctions when answering questions:
 - **Grading:** Compares the selected ID with the verified key. **AI feedback:** Helps explain supported mistakes.
 - **401:** login problem. **403:** insufficient permission. **404:** missing resource. **422:** invalid input. **503:** temporary service failure.
 - Current submissions are MCQs. Free-text verification and the four additional topic implementations are not active features.
+
+## 9. Hybrid translation without changing grades
+
+`assessments.py` still saves the canonical English question and verification snapshot. When reading a public question, submitted answer or teacher recommendation, it calls the small presentation helpers. They add `translations: {"si": {field: text}}` and `translation_warnings: [field]` to the response. The original fields remain available to existing clients. No language request parameter, database migration or duplicated test is required.
+
+The order is important:
+
+1. Generate and independently verify Mathematics, or load the existing saved question.
+2. Grade an answer by the existing key; accept AI feedback only under the original strict checks.
+3. Match reviewed topic templates for display text.
+4. For otherwise unsupported prose, optionally ask a topic-selected translation provider and validate its output.
+5. Keep English and list a missing field when no safe Sinhala wording is available.
+
+Binomial templates preserve complete algebraic fragments instead of replacing numbers or operators. Manual feedback and teaching recommendations therefore work in Sinhala with every AI service off. Historical tests and answer snapshots are translated on read only when their wording matches a known safe form; arbitrary old prose is not silently rewritten. Successful optional translations are cached to avoid repeated calls. The cache is an optimization, not persisted grading data.
+
+`answer_verification.py` loads the existing Binomial Ollama configuration lazily inside its adapter. This removes the eager import dependency when a future member topic imports the shared `Analysis` model. Its grading, confidence threshold, approved wording and manual fallback rules remain unchanged. `contracts.py` and `safe_symbolic.py` do not need language fields or relaxed mathematical parsing.
+
+Each unfinished topic can add reviewed `presentation_text(...)` wording and an optional `translation_provider()` alongside its existing provider choice. Nothing forces a member to use Nadula's model. Keep credentials in ignored backend environment variables, use finite timeouts, and test invalid output and manual-only mode before registration. The exact hook signatures and development steps are in [TOPIC_CONTRACT.md](../TOPIC_CONTRACT.md).
+
+The shared optional AI path masks Mathematics as `[[MATH_n]]` tokens, rejects changed/reordered/missing tokens or newly invented mathematical content, and requires the topic's `validate_translation(...)` to return exactly `True`. This second check approves meaning; symbol preservation alone does not establish a correct translation. Binomial accepts only its reviewed equivalents. Unrecognized historical prose therefore remains English even if a model offers an unreviewed translation.
+
+| Optional existing-Ollama setting | Meaning |
+| --- | --- |
+| `MATHROOT_TRANSLATION_MODE` | `manual` by default; `auto` permits the optional adapter when enabled by the topic. Reviewed templates run in either mode. |
+| `MATHROOT_TRANSLATION_MODEL` | Optional model override; otherwise uses the existing Binomial model setting/default. |
+| `MATHROOT_TRANSLATION_TIMEOUT_SECONDS` | Default 2 seconds; valid range 0.1–4. Invalid values use the default. |
+
+Each metadata operation permits at most two uncached provider calls. Successful validated translations use a bounded in-process cache with 256 entries and one-hour reuse; topic validation runs again on cache hits. Other topics can use their own environment prefix and translation adapter instead of this Ollama configuration.
+
+No new dependency or SQL migration is required for bilingual presentation. Focused automated translation tests use provider mocks. Existing configured Supabase credentials are still needed to run the application; live Auth/database/Ollama checks are separate from the offline suite.
+
+## 10. Verification recorded for bilingual support
+
+The full backend suite passed **103 tests**, including 47 focused presentation cases. Checks cover reviewed manual/grounded-AI feedback, mathematical identities and option order, invalid translations, semantic approval, cache/call budgets, legacy English snapshots, topic readiness and bilingual teacher reports. Existing authorization, persistence, retry/race and score checks remain passing. Only the pre-existing Starlette/httpx deprecation warning was reported.
+
+The suite uses fake database records and mocked providers. No live Supabase login/write workflow or actual Ollama translation/inference was run for this feature. The frontend production Chrome smoke verified language switching/persistence, public/auth page wording, validation, responsive layout and absence of observed hydration errors; those checks do not establish live assessment-provider connectivity.
 
 **Viva answer:** “The backend verifies identity and class membership, grades against the saved answer key, optionally uses validated AI feedback, and stores the result. Rule-based fallback keeps grading available when the AI service fails.”

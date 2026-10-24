@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:i18n": "node tests/i18n.test.cjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

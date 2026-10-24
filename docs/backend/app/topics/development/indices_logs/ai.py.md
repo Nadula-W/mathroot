@@ -6,7 +6,11 @@
 
 Read the code blocks in order. Each block contains the actual source and an explanation immediately below it. Line numbers match the source snapshot used here. Closing brackets and repeated markup are explained with their surrounding block.
 
-## Lines 1–10: Code section
+
+
+**Bilingual update:** The existing member-owned configuration and analysis TODOs remain. TopicTranslationProvider is an optional masked-prose adapter TODO using the same independent provider settings; manual mode prevents calls, and topic semantic approval is still required.
+
+## Lines 1–11: Code section
 
 ```python
 """Sadeepa: provider-specific code only. Choose any local or API-based model.
@@ -19,13 +23,14 @@ from app.answer_verification import Analysis
 from app.contracts import InternalQuestion
 
 PREFIX = "MATHROOT_INDICES_LOGS"
+
 ```
 
 **Explanation:**
 
 - Imports connect this file to the named helpers/components. app.* imports start from the backend package; . imports use the current package.
 
-## Lines 13–22: configuration()
+## Lines 13–23: configuration
 
 ```python
 def configuration() -> dict:
@@ -38,6 +43,7 @@ def configuration() -> dict:
         "api_key": os.getenv(f"{PREFIX}_API_KEY", ""),
         "timeout_seconds": os.getenv(f"{PREFIX}_TIMEOUT_SECONDS", "4"),
     }
+
 ```
 
 **Explanation:**
@@ -45,7 +51,7 @@ def configuration() -> dict:
 - Reads this member's own provider/model/endpoint/key/mode environment prefix. Timeout remains a string until the member implements parsing and bounded HTTP calls.
 - Reads environment settings instead of committing API keys/provider choices to source.
 
-## Lines 25–33: generate_question()
+## Lines 25–34: generate_question
 
 ```python
 def generate_question(difficulty: str) -> InternalQuestion:
@@ -57,6 +63,7 @@ def generate_question(difficulty: str) -> InternalQuestion:
     # Raise on unavailable services, timeouts, missing config or malformed data.
     # generator.py automatically tries manual.generate_question on failure.
     raise NotImplementedError("Choose and implement indices_logs AI generation.")
+
 ```
 
 **Explanation:**
@@ -64,7 +71,7 @@ def generate_question(difficulty: str) -> InternalQuestion:
 - In ai.py/manual.py this is an unfinished topic TODO. In generator.py it validates difficulty, tries AI plus mathematical validation, and falls back to the manual generator. The adapter class delegates to the same module-level function.
 - This is a deliberate unfinished TODO. The topic/provider is not a completed mathematics implementation.
 
-## Lines 36–46: analyze_answer()
+## Lines 36–47: analyze_answer
 
 ```python
 def analyze_answer(context: dict) -> Analysis:
@@ -78,6 +85,7 @@ def analyze_answer(context: dict) -> Analysis:
     # context['approved_explanations'] and context['approved_guidance'].
     # The shared service checks confidence and rejects unsupported output.
     raise NotImplementedError("Choose and implement indices_logs AI answer analysis.")
+
 ```
 
 **Explanation:**
@@ -98,7 +106,7 @@ class TopicFeedbackProvider:
 - Groups the fields/methods of TopicFeedbackProvider. Declarations alone do not call a model or create database records; the following method sections explain execution.
 - This section supplies the surrounding function/component's fixed fields, messages or structure. Closing brackets complete the earlier object/call/markup; they do not make a separate request.
 
-## Lines 51–55: analyze()
+## Lines 51–70: analyze()
 
 ```python
     def analyze(self, context: dict) -> Analysis:
@@ -106,6 +114,21 @@ class TopicFeedbackProvider:
             # Caught by the shared service; no network request is made.
             raise RuntimeError("Topic configured for manual feedback.")
         return analyze_answer(context)
+
+
+class TopicTranslationProvider:
+    """Optional Sinhala translation using this topic's provider configuration."""
+    def translate(self, text: str) -> str:
+        # TODO: Read configuration() and translate the masked prose to Sinhala.
+        # Preserve each [[MATH_n]] placeholder exactly once in the same order.
+        # Return the translated string, with a finite network timeout. Do not
+        # translate or solve the hidden mathematics and do not send identities.
+        # You may use Ollama, Gemini, OpenRouter, another API, or remain manual.
+        # The shared presentation service additionally requires this topic's
+        # validate_translation hook to approve the meaning before display.
+        if configuration()["mode"] == "manual":
+            raise RuntimeError("Topic configured for manual translation.")
+        raise NotImplementedError("Choose and implement this topic's translation provider.")
 ```
 
 **Explanation:**

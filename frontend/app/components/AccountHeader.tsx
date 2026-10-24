@@ -1,5 +1,7 @@
-
 "use client";
+import { useLanguage } from "../../lib/i18n/LanguageProvider";
+
+
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -13,6 +15,8 @@ export default function AccountHeader({
   name: string;
   role: "student" | "teacher";
 }) {
+
+  const { t, errorText } = useLanguage();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
   const [error, setError] = useState("");
@@ -44,18 +48,16 @@ export default function AccountHeader({
         </Link>
         <span className="mr-account-section">
           {role === "teacher"
-            ? "Teacher Workspace"
-            : "Student Workspace"}
+            ? t("Teacher Workspace")
+            : t("Student Workspace")}
         </span>
       </div>
 
       <div className="mr-account-right">
         <div className="mr-account-user">
-          <span className="mr-account-greeting">
-            Hi, {name}
-          </span>
+          <span className="mr-account-greeting">{t("Hi, {name}", { name })}</span>
           <span className="mr-account-role">
-            {role === "teacher" ? "Teacher" : "Student"}
+            {t(role === "teacher" ? "Teacher" : "Student")}
           </span>
         </div>
 
@@ -65,13 +67,13 @@ export default function AccountHeader({
           onClick={logout}
           disabled={loggingOut}
         >
-          {loggingOut ? "Logging out..." : "Log out"}
+          {t(loggingOut ? "Logging out..." : "Log out")}
         </button>
       </div>
 
       {error && (
         <p className="mr-account-error" role="alert">
-          {error}
+          {errorText(error)}
         </p>
       )}
     </header>
