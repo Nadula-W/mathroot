@@ -119,4 +119,4 @@ def test_bilingual_manual_test_creation_and_topic_readiness(client, monkeypatch)
     assert all(q['translations']['si']['statement'] for q in public['questions'])
     assert client.db['mathroot_tests'][-1] == stored
     topics = client.get('/api/topics').json()
-    assert [t['id'] for t in topics if t['ready']] == ['binomial']
+    assert [t['id'] for t in topics if t['ready']] == ['binomial', 'algebraic_fractions']

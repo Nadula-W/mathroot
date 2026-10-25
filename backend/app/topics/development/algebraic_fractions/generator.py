@@ -30,7 +30,13 @@ class AlgebraicFractionsTopic:
     topic_id = "algebraic_fractions"
     title = "Algebraic Fractions"
     # TODO: Populate with stable codes supported by your diagnostic distractors.
-    misconception_definitions: dict[str, str] = {}
+    misconception_definitions: dict[str, str] = {
+        "DENOMINATOR_ADDITION": "Added denominators directly across fractions instead of finding or keeping a common denominator.",
+        "UNSCALED_NUMERATOR": "Converted to a common denominator but failed to scale the numerator by the corresponding factor.",
+        "SIGN_ERROR": "Added numerators instead of subtracting (or subtracted instead of adding).",
+        "SIGN_DISTRIBUTION_ERROR": "Failed to distribute the negative sign across both terms of a binomial numerator during subtraction.",
+        "NUMERATOR_OPERATION_CONFUSION": "Multiplied numerators instead of adding or subtracting them.",
+    }
 
     def generate_question(self, difficulty: str) -> InternalQuestion:
         return generate_question(difficulty)
@@ -45,19 +51,14 @@ class AlgebraicFractionsTopic:
         # The shared verifier calls this optional hook after registration.
         return ai.TopicFeedbackProvider()
 
-
     def presentation_text(self, field: str, text: str, question=None, misconception=None):
-        # TODO: Match reviewed English/Sinhala templates by exact full text.
-        # Cover statement, explanation, feedback and teaching recommendations.
-        # Keep every mathematical expression unchanged. None means English + warning.
-        return None
+        from .presentation import presentation_text
+        return presentation_text(field, text, question=question, misconception=misconception)
 
     def translation_provider(self):
-        # Optional: use this topic's own provider, never Nadula's configuration.
-        return ai.TopicTranslationProvider()
+        # Dynamic AI translation is unfinished; return None to avoid exposing an incomplete provider.
+        return None
 
     def validate_translation(self, field: str, source: str, translated: str, question=None) -> bool:
-        # TODO: Semantically approve only reviewed pairs or deterministic topic
-        # templates. Placeholder checks alone cannot prove a translation correct.
-        # Until implemented, all AI translations safely remain English.
-        return False
+        expected = self.presentation_text(field, source, question=question)
+        return expected is not None and expected == translated
