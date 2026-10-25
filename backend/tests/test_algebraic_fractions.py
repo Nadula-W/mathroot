@@ -761,6 +761,184 @@ def test_ai_generate_question_unsupported_family_rejected(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Parameter-based AI Generation Tests
+# ---------------------------------------------------------------------------
+
+def make_valid_param_easy_payload():
+    return {"a": 5, "b": 3}
+
+
+def make_valid_param_medium_payload():
+    return {"a": 5, "b": 3, "k": 2}
+
+
+def make_valid_param_hard_payload():
+    return {"a": 4, "b": 2, "c": 1, "d": 5}
+
+
+def test_ai_generate_question_parameter_easy_success(monkeypatch):
+    monkeypatch.setenv("MATHROOT_ALGEBRAIC_FRACTIONS_MODE", "auto")
+    monkeypatch.setenv("MATHROOT_ALGEBRAIC_FRACTIONS_PROVIDER", "ollama")
+    monkeypatch.setenv("MATHROOT_ALGEBRAIC_FRACTIONS_MODEL", "qwen2.5:math")
+    monkeypatch.setenv("MATHROOT_ALGEBRAIC_FRACTIONS_BASE_URL", "http://127.0.0.1:11434")
+
+    mock_resp = make_mock_response(json_data=make_valid_param_easy_payload())
+    with patch("httpx.Client.post", return_value=mock_resp):
+        q = ai.generate_question("easy")
+
+    validate_question(q)
+    assert q.topic_id == "algebraic_fractions"
+    assert q.difficulty == "easy"
+    assert q.source_expression == "5/x + 3/x"
+    assert q.correct_expression == "8/x"
+    assert q.statement == "Simplify: 5/x + 3/x (where x != 0)"
+    assert q.explanation == (
+        "The fractions have a common denominator x. Add the numerators: "
+        "(5 + 3)/x = 8/x (where x != 0)."
+    )
+    assert len(q.options) == 4
+    assert len({opt.id for opt in q.options}) == 4
+    assert any(opt.id == q.correct_option_id and opt.text == "8/x" and opt.misconception is None for opt in q.options)
+
+
+def test_ai_generate_question_parameter_medium_success(monkeypatch):
+    monkeypatch.setenv("MATHROOT_ALGEBRAIC_FRACTIONS_MODEL", "qwen2.5:math")
+
+    mock_resp = make_mock_response(json_data=make_valid_param_medium_payload())
+    with patch("httpx.Client.post", return_value=mock_resp):
+        q = ai.generate_question("medium")
+
+    validate_question(q)
+    assert q.difficulty == "medium"
+    assert q.source_expression == "5/x - 3/(2*x)"
+    assert q.correct_expression == "7/(2*x)"
+    assert q.statement == "Simplify: 5/x - 3/(2*x) (where x != 0)"
+    assert q.explanation == (
+        "The least common denominator of x and 2x is 2x. Scale the first fraction: "
+        "(2*5 - 3)/(2x) = (10 - 3)/(2x) = 7/(2x) (where x != 0)."
+    )
+    assert len(q.options) == 4
+    assert any(opt.id == q.correct_option_id and opt.text == "7/(2*x)" and opt.misconception is None for opt in q.options)
+
+
+def test_ai_generate_question_parameter_hard_success(monkeypatch):
+    monkeypatch.setenv("MATHROOT_ALGEBRAIC_FRACTIONS_MODEL", "qwen2.5:math")
+
+    mock_resp = make_mock_response(json_data=make_valid_param_hard_payload())
+    with patch("httpx.Client.post", return_value=mock_resp):
+        q = ai.generate_question("hard")
+
+    validate_question(q)
+    assert q.difficulty == "hard"
+    assert q.source_expression == "4/(x + 2) - 1/(x + 5)"
+    assert q.correct_expression == "(3*x + 18)/((x + 2)*(x + 5))"
+    assert q.statement == "Simplify: 4/(x + 2) - 1/(x + 5) (where x != -2 and x != -5)"
+    assert "x != -2 and x != -5" in q.explanation
+    assert len(q.options) == 4
+    assert any(
+        opt.id == q.correct_option_id and opt.text == "(3*x + 18)/((x + 2)*(x + 5))" and opt.misconception is None
+        for opt in q.options
+    )
+
+
+def test_ai_generate_question_untrusted_model_expressions_discarded(monkeypatch):
+    # Model attempts to inject untrusted expression, statement, explanation, or options
+    payload = {
+        "a": 5,
+        "b": 3,
+        "statement": "UNTRUSTED STATEMENT",
+        "explanation": "UNTRUSTED EXPLANATION",
+        "options": [{"text": "999/x"}],
+        "id": "untrusted-id",
+    }
+    monkeypatch.setenv("MATHROOT_ALGEBRAIC_FRACTIONS_MODEL", "qwen2.5:math")
+    mock_resp = make_mock_response(json_data=payload)
+
+    with patch("httpx.Client.post", return_value=mock_resp):
+        q = ai.generate_question("easy")
+
+    # Local trusted templates must be used
+    assert q.id != "untrusted-id"
+    assert "UNTRUSTED STATEMENT" not in q.statement
+    assert "UNTRUSTED EXPLANATION" not in q.explanation
+    assert q.statement == "Simplify: 5/x + 3/x (where x != 0)"
+    assert q.explanation == (
+        "The fractions have a common denominator x. Add the numerators: "
+        "(5 + 3)/x = 8/x (where x != 0)."
+    )
+    assert not any("999/x" in opt.text for opt in q.options)
+
+
+def test_ai_generate_question_invalid_parameters_easy(monkeypatch):
+    monkeypatch.setenv("MATHROOT_ALGEBRAIC_FRACTIONS_MODEL", "qwen2.5:math")
+
+    invalid_cases = [
+        {"a": 3, "b": 1},      # a == 3*b disallowed
+        {"a": 2, "b": 5},      # a <= b disallowed
+        {"a": 5, "b": 5},      # a == b disallowed
+        {"a": 10, "b": 2},     # a > 9 disallowed
+        {"a": 4, "b": 0},      # b < 1 disallowed
+        {"a": 5},              # missing parameter b
+        {"a": "5", "b": 3},    # string parameter
+        {"a": True, "b": 3},   # boolean parameter
+        {"a": 5.5, "b": 3},    # float parameter
+    ]
+
+    for bad_params in invalid_cases:
+        mock_resp = make_mock_response(json_data=bad_params)
+        with patch("httpx.Client.post", return_value=mock_resp):
+            with pytest.raises(ValueError):
+                ai.generate_question("easy")
+
+
+def test_ai_generate_question_invalid_parameters_medium(monkeypatch):
+    monkeypatch.setenv("MATHROOT_ALGEBRAIC_FRACTIONS_MODEL", "qwen2.5:math")
+
+    invalid_cases = [
+        {"a": 3, "b": 4, "k": 2},  # a <= b
+        {"a": 5, "b": 2, "k": 1},  # k < 2
+        {"a": 5, "b": 2, "k": 5},  # k > 4
+        {"a": 7, "b": 2, "k": 2},  # a > 6
+        {"a": 4, "b": 2},          # missing k
+    ]
+
+    for bad_params in invalid_cases:
+        mock_resp = make_mock_response(json_data=bad_params)
+        with patch("httpx.Client.post", return_value=mock_resp):
+            with pytest.raises(ValueError):
+                ai.generate_question("medium")
+
+
+def test_ai_generate_question_invalid_parameters_hard(monkeypatch):
+    monkeypatch.setenv("MATHROOT_ALGEBRAIC_FRACTIONS_MODEL", "qwen2.5:math")
+
+    invalid_cases = [
+        {"a": 4, "b": 5, "c": 1, "d": 2},  # b >= d
+        {"a": 2, "b": 2, "c": 3, "d": 5},  # c >= a
+        {"a": 6, "b": 2, "c": 1, "d": 5},  # a > 5
+        {"a": 4, "b": 0, "c": 1, "d": 5},  # b < 1
+        {"a": 4, "b": 2, "c": 1},          # missing d
+    ]
+
+    for bad_params in invalid_cases:
+        mock_resp = make_mock_response(json_data=bad_params)
+        with patch("httpx.Client.post", return_value=mock_resp):
+            with pytest.raises(ValueError):
+                ai.generate_question("hard")
+
+
+def test_generator_falls_back_to_manual_on_invalid_parameters(monkeypatch):
+    monkeypatch.setenv("MATHROOT_ALGEBRAIC_FRACTIONS_MODE", "auto")
+    monkeypatch.setenv("MATHROOT_ALGEBRAIC_FRACTIONS_MODEL", "qwen2.5:math")
+    mock_resp = make_mock_response(json_data={"a": 3, "b": 1})  # Invalid easy parameters: a == 3*b
+    with patch("httpx.Client.post", return_value=mock_resp):
+        q = generator.generate_question("easy")
+    validate_question(q)
+    assert q.topic_id == "algebraic_fractions"
+    assert q.difficulty == "easy"
+
+
+# ---------------------------------------------------------------------------
 # Answer Analysis & Verification Tests (Mocked)
 # ---------------------------------------------------------------------------
 

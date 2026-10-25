@@ -59,39 +59,201 @@ def _parse_timeout(value: str | int | float | None) -> float:
         return 4.0
 
 
+SCHEMAS = {
+    "easy": {
+        "type": "object",
+        "properties": {
+            "a": {"type": "integer"},
+            "b": {"type": "integer"},
+        },
+        "required": ["a", "b"],
+        "additionalProperties": False,
+    },
+    "medium": {
+        "type": "object",
+        "properties": {
+            "a": {"type": "integer"},
+            "b": {"type": "integer"},
+            "k": {"type": "integer"},
+        },
+        "required": ["a", "b", "k"],
+        "additionalProperties": False,
+    },
+    "hard": {
+        "type": "object",
+        "properties": {
+            "a": {"type": "integer"},
+            "b": {"type": "integer"},
+            "c": {"type": "integer"},
+            "d": {"type": "integer"},
+        },
+        "required": ["a", "b", "c", "d"],
+        "additionalProperties": False,
+    },
+}
+
+
 def _build_prompt(difficulty: str) -> str:
     if difficulty == "easy":
-        guidelines = (
-            "Family: Simplify a/x + b/x (where x != 0) with 1 <= b < a <= 9 and a != 3b. "
-            "Explanations must state '(where x != 0)'. "
-            "Supported distractor misconceptions: 'DENOMINATOR_ADDITION', 'NUMERATOR_OPERATION_CONFUSION', 'SIGN_ERROR'."
-        )
+        rules = "1 <= b < a <= 9 and a != 3*b"
+        fields = "a and b"
+        family = "a/x + b/x"
     elif difficulty == "medium":
-        guidelines = (
-            "Family: Simplify a/x - b/(k*x) (where x != 0) with k in 2..4, 1 <= b < a <= 6. "
-            "Explanations must state '(where x != 0)'. "
-            "Supported distractor misconceptions: 'DENOMINATOR_ADDITION', 'UNSCALED_NUMERATOR', 'SIGN_ERROR'."
-        )
-    else:  # hard
-        guidelines = (
-            "Family: Simplify a/(x + b) - c/(x + d) (where x != -b and x != -d) with 1 <= b < d <= 6 and 1 <= c < a <= 5. "
-            "Explanations must state '(where x != -b and x != -d)'. "
-            "Supported distractor misconceptions: 'SIGN_DISTRIBUTION_ERROR', 'DENOMINATOR_ADDITION', 'UNSCALED_NUMERATOR'."
-        )
+        rules = "2 <= k <= 4, 1 <= b < a <= 6"
+        fields = "a, b, and k"
+        family = "a/x - b/(k*x)"
+    elif difficulty == "hard":
+        rules = "1 <= b < d <= 6 and 1 <= c < a <= 5"
+        fields = "a, b, c, and d"
+        family = "a/(x + b) - c/(x + d)"
+    else:
+        raise ValueError(f"Unsupported difficulty: {difficulty!r}")
 
     return (
-        f"Generate ONE original Sri Lankan O/L Mathematics algebraic fractions question of difficulty '{difficulty}'.\n"
-        f"{guidelines}\n"
-        "Return ONLY a JSON object with these exact keys:\n"
-        "- statement: string containing the question statement and domain restriction (e.g., 'Simplify: 3/x + 2/x (where x != 0)')\n"
-        "- source_expression: string containing the unsimplified expression (e.g., '3/x + 2/x')\n"
-        "- correct_expression: string containing the simplified expression (e.g., '5/x')\n"
-        "- explanation: string showing complete worked steps and stating the domain restriction\n"
-        "- options: array of exactly 4 objects, each with 'text' (string) and 'misconception' (string or null).\n"
-        "  Exactly ONE option must have misconception null (the mathematically correct answer matching correct_expression).\n"
-        "  The other 3 options must be distinct distractors with approved misconception codes from the guidelines above.\n"
-        "Do not wrap in markdown or backticks. Return raw JSON."
+        f"Select integer parameters for an algebraic fractions question of difficulty '{difficulty}'.\n"
+        f"Question family: {family}.\n"
+        f"Parameter rules: {rules}.\n"
+        f"Return ONLY a JSON object containing the integer fields {fields}.\n"
+        "Do not provide expressions, options, statements, or explanations."
     )
+
+
+def _validate_parameters(difficulty: str, params: dict):
+    if not isinstance(params, dict):
+        raise ValueError("AI response must be a JSON object.")
+
+    if difficulty == "easy":
+        required = {"a", "b"}
+        if not required.issubset(params.keys()):
+            raise ValueError(f"AI response missing required parameters: {sorted(required - set(params.keys()))}")
+        for k in required:
+            v = params[k]
+            if isinstance(v, bool) or not isinstance(v, int):
+                raise ValueError(f"Parameter {k!r} must be an integer, got {type(v).__name__}.")
+        a, b = params["a"], params["b"]
+        if not (1 <= b < a <= 9 and a != 3 * b):
+            raise ValueError(
+                f"Easy parameters a={a}, b={b} out of supported range (1 <= b < a <= 9 and a != 3*b)."
+            )
+        return a, b
+
+    elif difficulty == "medium":
+        required = {"a", "b", "k"}
+        if not required.issubset(params.keys()):
+            raise ValueError(f"AI response missing required parameters: {sorted(required - set(params.keys()))}")
+        for k in required:
+            v = params[k]
+            if isinstance(v, bool) or not isinstance(v, int):
+                raise ValueError(f"Parameter {k!r} must be an integer, got {type(v).__name__}.")
+        a, b, k = params["a"], params["b"], params["k"]
+        if not (2 <= k <= 4 and 1 <= b < a <= 6):
+            raise ValueError(
+                f"Medium parameters a={a}, b={b}, k={k} out of supported range (2 <= k <= 4 and 1 <= b < a <= 6)."
+            )
+        return a, b, k
+
+    elif difficulty == "hard":
+        required = {"a", "b", "c", "d"}
+        if not required.issubset(params.keys()):
+            raise ValueError(f"AI response missing required parameters: {sorted(required - set(params.keys()))}")
+        for k in required:
+            v = params[k]
+            if isinstance(v, bool) or not isinstance(v, int):
+                raise ValueError(f"Parameter {k!r} must be an integer, got {type(v).__name__}.")
+        a, b, c, d = params["a"], params["b"], params["c"], params["d"]
+        if not (1 <= b < d <= 6 and 1 <= c < a <= 5):
+            raise ValueError(
+                f"Hard parameters a={a}, b={b}, c={c}, d={d} out of supported range (1 <= b < d <= 6 and 1 <= c < a <= 5)."
+            )
+        return a, b, c, d
+
+    else:
+        raise ValueError(f"Unsupported difficulty: {difficulty!r}")
+
+
+def _build_question_from_parameters(difficulty: str, params: tuple) -> InternalQuestion:
+    if difficulty == "easy":
+        a, b = params
+        statement = f"Simplify: {a}/x + {b}/x (where x != 0)"
+        source_expression = f"{a}/x + {b}/x"
+        correct_expression = f"{a + b}/x"
+        explanation = (
+            f"The fractions have a common denominator x. Add the numerators: "
+            f"({a} + {b})/x = {a + b}/x (where x != 0)."
+        )
+        raw_options = [
+            (f"{a + b}/x", None),
+            (f"{a + b}/(2*x)", "DENOMINATOR_ADDITION"),
+            (f"{a * b}/x", "NUMERATOR_OPERATION_CONFUSION"),
+            (f"{a - b}/x", "SIGN_ERROR"),
+        ]
+
+    elif difficulty == "medium":
+        a, b, k = params
+        statement = f"Simplify: {a}/x - {b}/({k}*x) (where x != 0)"
+        source_expression = f"{a}/x - {b}/({k}*x)"
+        correct_expression = f"{k * a - b}/({k}*x)"
+        explanation = (
+            f"The least common denominator of x and {k}x is {k}x. Scale the first fraction: "
+            f"({k}*{a} - {b})/({k}x) = ({k * a} - {b})/({k}x) = {k * a - b}/({k}x) (where x != 0)."
+        )
+        raw_options = [
+            (f"{k * a - b}/({k}*x)", None),
+            (f"{a - b}/({k + 1}*x)", "DENOMINATOR_ADDITION"),
+            (f"{a - b}/({k}*x)", "UNSCALED_NUMERATOR"),
+            (f"{k * a + b}/({k}*x)", "SIGN_ERROR"),
+        ]
+
+    elif difficulty == "hard":
+        a, b, c, d = params
+        num_correct = manual._as_linear(a - c, a * d - c * b)
+        num_sign_dist = manual._as_linear(a - c, a * d + c * b)
+        statement = f"Simplify: {a}/(x + {b}) - {c}/(x + {d}) (where x != -{b} and x != -{d})"
+        source_expression = f"{a}/(x + {b}) - {c}/(x + {d})"
+        correct_expression = f"({num_correct})/((x + {b})*(x + {d}))"
+        explanation = (
+            f"The common denominator is (x + {b})(x + {d}). Expand and subtract the numerators: "
+            f"[{a}(x + {d}) - {c}(x + {b})]/[(x + {b})(x + {d})] = "
+            f"[{a}x + {a * d} - {c}x - {c * b}]/[(x + {b})(x + {d})] = "
+            f"({num_correct})/((x + {b})(x + {d})) (where x != -{b} and x != -{d})."
+        )
+        raw_options = [
+            (f"({num_correct})/((x + {b})*(x + {d}))", None),
+            (f"({num_sign_dist})/((x + {b})*(x + {d}))", "SIGN_DISTRIBUTION_ERROR"),
+            (f"{a - c}/(2*x + {b + d})", "DENOMINATOR_ADDITION"),
+            (f"{a - c}/((x + {b})*(x + {d}))", "UNSCALED_NUMERATOR"),
+        ]
+
+    else:
+        raise ValueError(f"Unsupported difficulty: {difficulty!r}")
+
+    if len({text for text, _ in raw_options}) != 4:
+        raise ValueError("Generated distractor options are not pairwise distinct.")
+
+    correct_id = str(uuid4())
+    options = [
+        InternalOption(
+            id=correct_id if label is None else str(uuid4()),
+            text=text,
+            misconception=label,
+        )
+        for text, label in raw_options
+    ]
+    random.shuffle(options)
+
+    question = InternalQuestion(
+        id=str(uuid4()),
+        topic_id="algebraic_fractions",
+        difficulty=difficulty,
+        statement=statement,
+        options=options,
+        correct_option_id=correct_id,
+        explanation=explanation,
+        source_expression=source_expression,
+        correct_expression=correct_expression,
+    )
+    manual.validate_question(question)
+    return question
 
 
 def _validate_family_and_get_expected(difficulty: str, statement: str, source_expr: str):
@@ -205,78 +367,7 @@ def _validate_family_and_get_expected(difficulty: str, statement: str, source_ex
     return trusted_statement, trusted_explanation, trusted_source, trusted_correct, expected_formulas
 
 
-def generate_question(difficulty: str) -> InternalQuestion:
-    if difficulty not in {"easy", "medium", "hard"}:
-        raise ValueError(f"Invalid difficulty {difficulty!r}; expected 'easy', 'medium', or 'hard'.")
-
-    cfg = configuration()
-    if cfg.get("mode") == "manual":
-        raise RuntimeError("Topic configured for manual mode.")
-
-    provider = (cfg.get("provider") or "ollama").strip().lower()
-    if provider not in {"ollama", "local"}:
-        raise ValueError(f"Unsupported provider: {cfg.get('provider')!r}; expected 'ollama'.")
-
-    model = (cfg.get("model") or "").strip()
-    if not model:
-        raise ValueError("Missing model in algebraic_fractions configuration.")
-
-    base_url = (cfg.get("base_url") or "http://127.0.0.1:11434").strip().rstrip("/")
-    timeout = _parse_timeout(cfg.get("timeout_seconds"))
-
-    payload = {
-        "model": model,
-        "stream": False,
-        "format": "json",
-        "options": {
-            "temperature": 0.7,
-        },
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You are a mathematics question generator for algebraic fractions. "
-                    "Output strictly valid JSON conforming to the requested schema. "
-                    "Ensure mathematical accuracy and strict adherence to diagnostic misconception codes."
-                ),
-            },
-            {
-                "role": "user",
-                "content": _build_prompt(difficulty),
-            },
-        ],
-    }
-
-    try:
-        with httpx.Client(timeout=timeout) as client:
-            resp = client.post(f"{base_url}/api/chat", json=payload)
-            resp.raise_for_status()
-            resp_data = resp.json()
-    except httpx.TimeoutException as exc:
-        raise TimeoutError(f"Ollama request timed out after {timeout} seconds.") from exc
-    except httpx.HTTPError as exc:
-        raise RuntimeError(f"Ollama HTTP service error: {exc}") from exc
-    except Exception as exc:
-        raise RuntimeError(f"Failed to communicate with Ollama: {exc}") from exc
-
-    if not isinstance(resp_data, dict):
-        raise ValueError("AI response must be a JSON object.")
-
-    content = resp_data.get("message", {}).get("content")
-    if not content or not isinstance(content, str):
-        if "statement" in resp_data:
-            content_dict = resp_data
-        else:
-            raise ValueError("Ollama response missing message content.")
-    else:
-        try:
-            content_dict = json.loads(content)
-        except Exception as exc:
-            raise ValueError(f"Failed to parse AI JSON response: {exc}") from exc
-
-    if not isinstance(content_dict, dict):
-        raise ValueError("AI response content must be a JSON object.")
-
+def _validate_full_payload_and_build(difficulty: str, content_dict: dict) -> InternalQuestion:
     required_keys = {"statement", "source_expression", "correct_expression", "explanation", "options"}
     missing = required_keys - set(content_dict.keys())
     if missing:
@@ -377,6 +468,86 @@ def generate_question(difficulty: str) -> InternalQuestion:
 
     # Call the existing mathematical validator before accepting
     manual.validate_question(question)
+    return question
+
+
+def generate_question(difficulty: str) -> InternalQuestion:
+    if difficulty not in {"easy", "medium", "hard"}:
+        raise ValueError(f"Invalid difficulty {difficulty!r}; expected 'easy', 'medium', or 'hard'.")
+
+    cfg = configuration()
+    if cfg.get("mode") == "manual":
+        raise RuntimeError("Topic configured for manual mode.")
+
+    provider = (cfg.get("provider") or "ollama").strip().lower()
+    if provider not in {"ollama", "local"}:
+        raise ValueError(f"Unsupported provider: {cfg.get('provider')!r}; expected 'ollama'.")
+
+    model = (cfg.get("model") or "").strip()
+    if not model:
+        raise ValueError("Missing model in algebraic_fractions configuration.")
+
+    base_url = (cfg.get("base_url") or "http://127.0.0.1:11434").strip().rstrip("/")
+    timeout = _parse_timeout(cfg.get("timeout_seconds"))
+
+    payload = {
+        "model": model,
+        "stream": False,
+        "format": SCHEMAS[difficulty],
+        "options": {
+            "temperature": 0.7,
+        },
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are a mathematics question parameter selector for algebraic fractions. "
+                    "Output strictly valid JSON conforming to the requested schema. "
+                    "Ensure parameter validity for the requested difficulty."
+                ),
+            },
+            {
+                "role": "user",
+                "content": _build_prompt(difficulty),
+            },
+        ],
+    }
+
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.post(f"{base_url}/api/chat", json=payload)
+            resp.raise_for_status()
+            resp_data = resp.json()
+    except httpx.TimeoutException as exc:
+        raise TimeoutError(f"Ollama request timed out after {timeout} seconds.") from exc
+    except httpx.HTTPError as exc:
+        raise RuntimeError(f"Ollama HTTP service error: {exc}") from exc
+    except Exception as exc:
+        raise RuntimeError(f"Failed to communicate with Ollama: {exc}") from exc
+
+    if not isinstance(resp_data, dict):
+        raise ValueError("AI response must be a JSON object.")
+
+    content = resp_data.get("message", {}).get("content")
+    if not content or not isinstance(content, str):
+        if "statement" in resp_data or "source_expression" in resp_data or "a" in resp_data:
+            content_dict = resp_data
+        else:
+            raise ValueError("Ollama response missing message content.")
+    else:
+        try:
+            content_dict = json.loads(content)
+        except Exception as exc:
+            raise ValueError(f"Failed to parse AI JSON response: {exc}") from exc
+
+    if not isinstance(content_dict, dict):
+        raise ValueError("AI response content must be a JSON object.")
+
+    if "source_expression" in content_dict or "correct_expression" in content_dict:
+        return _validate_full_payload_and_build(difficulty, content_dict)
+
+    params = _validate_parameters(difficulty, content_dict)
+    question = _build_question_from_parameters(difficulty, params)
     return question
 
 
