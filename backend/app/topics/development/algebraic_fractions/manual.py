@@ -153,113 +153,165 @@ def _check_domain_equivalence(source_text: str, answer_text: str) -> None:
         raise ValueError("Answer adds an unsupported excluded denominator value.")
 
 
+class ParameterSpaceExhaustedError(RuntimeError):
+    """Raised when all parameter combinations for a family have been exhausted."""
+    pass
+
+
+def get_all_valid_parameters(difficulty: str) -> list[tuple]:
+    """Return all valid parameter tuples for the given difficulty family.
+
+    Easy: 1 <= b < a <= 9 and a != 3*b (exactly 33 valid pairs)
+    Medium: 2 <= k <= 4, 1 <= b < a <= 6 (exactly 45 valid triples)
+    Hard: 1 <= b < d <= 6 and 1 <= c < a <= 5 (exactly 150 valid 4-tuples)
+    """
+    if difficulty == "easy":
+        return [(a, b) for a in range(2, 10) for b in range(1, a) if a != 3 * b]
+    elif difficulty == "medium":
+        return [(a, b, k) for k in range(2, 5) for a in range(2, 7) for b in range(1, a)]
+    elif difficulty == "hard":
+        return [
+            (a, b, c, d)
+            for b in range(1, 6)
+            for d in range(b + 1, 7)
+            for c in range(1, 5)
+            for a in range(c + 1, 6)
+        ]
+    raise ValueError(f"Invalid difficulty: {difficulty!r}")
+
+
+def extract_question_parameters(question: InternalQuestion) -> tuple[str, tuple]:
+    """Parse difficulty family and parameter values from an InternalQuestion."""
+    clean_src = _clean_math_text(question.source_expression)
+    norm_src = re.sub(r"\s+", "", clean_src)
+
+    m = re.fullmatch(r"(\d+)/x\+(\d+)/x", norm_src)
+    if m:
+        return "easy", (int(m.group(1)), int(m.group(2)))
+
+    m = re.fullmatch(r"(\d+)/x-(\d+)/\(?(\d+)\*?x\)?", norm_src)
+    if m:
+        return "medium", (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+
+    m = re.fullmatch(r"(\d+)/\(x\+(\d+)\)-(\d+)/\(x\+(\d+)\)", norm_src)
+    if m:
+        return "hard", (int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4)))
+
+    raise ValueError(f"Unrecognized question family for source expression: {question.source_expression!r}")
+
+
+def build_question_from_parameters(
+    difficulty: str,
+    params: tuple,
+    rng: random.Random | None = None,
+) -> InternalQuestion:
+    """Build and validate an InternalQuestion from verified parameters."""
+    r = rng or random.SystemRandom()
+
+    if difficulty == "easy":
+        a, b = params
+        statement = f"Simplify: {a}/x + {b}/x (where x != 0)"
+        source_expression = f"{a}/x + {b}/x"
+        correct_expression = f"{a + b}/x"
+        explanation = (
+            f"The fractions have a common denominator x. Add the numerators: "
+            f"({a} + {b})/x = {a + b}/x (where x != 0)."
+        )
+        raw_options = [
+            (f"{a + b}/x", None),
+            (f"{a + b}/(2*x)", "DENOMINATOR_ADDITION"),
+            (f"{a * b}/x", "NUMERATOR_OPERATION_CONFUSION"),
+            (f"{a - b}/x", "SIGN_ERROR"),
+        ]
+
+    elif difficulty == "medium":
+        a, b, k = params
+        statement = f"Simplify: {a}/x - {b}/({k}*x) (where x != 0)"
+        source_expression = f"{a}/x - {b}/({k}*x)"
+        correct_expression = f"{k * a - b}/({k}*x)"
+        explanation = (
+            f"The least common denominator of x and {k}x is {k}x. Scale the first fraction: "
+            f"({k}*{a} - {b})/({k}x) = ({k * a} - {b})/({k}x) = {k * a - b}/({k}x) (where x != 0)."
+        )
+        raw_options = [
+            (f"{k * a - b}/({k}*x)", None),
+            (f"{a - b}/({k + 1}*x)", "DENOMINATOR_ADDITION"),
+            (f"{a - b}/({k}*x)", "UNSCALED_NUMERATOR"),
+            (f"{k * a + b}/({k}*x)", "SIGN_ERROR"),
+        ]
+
+    elif difficulty == "hard":
+        a, b, c, d = params
+        statement = f"Simplify: {a}/(x + {b}) - {c}/(x + {d}) (where x != -{b} and x != -{d})"
+        source_expression = f"{a}/(x + {b}) - {c}/(x + {d})"
+        correct_expression = f"({_as_linear(a - c, a * d - c * b)})/((x + {b})*(x + {d}))"
+        explanation = (
+            f"The common denominator is (x + {b})(x + {d}). Expand and subtract the numerators: "
+            f"[{a}(x + {d}) - {c}(x + {b})]/[(x + {b})(x + {d})] = "
+            f"[{a}x + {a * d} - {c}x - {c * b}]/[(x + {b})(x + {d})] = "
+            f"({_as_linear(a - c, a * d - c * b)})/((x + {b})(x + {d})) (where x != -{b} and x != -{d})."
+        )
+        raw_options = [
+            (f"({_as_linear(a - c, a * d - c * b)})/((x + {b})*(x + {d}))", None),
+            (f"({_as_linear(a - c, a * d + c * b)})/((x + {b})*(x + {d}))", "SIGN_DISTRIBUTION_ERROR"),
+            (f"{a - c}/(2*x + {b + d})", "DENOMINATOR_ADDITION"),
+            (f"{a - c}/((x + {b})*(x + {d}))", "UNSCALED_NUMERATOR"),
+        ]
+
+    else:
+        raise ValueError(f"Invalid difficulty: {difficulty!r}")
+
+    correct_id = str(uuid4())
+    options = [
+        InternalOption(
+            id=correct_id if label is None else str(uuid4()),
+            text=text,
+            misconception=label,
+        )
+        for text, label in raw_options
+    ]
+    r.shuffle(options)
+
+    question = InternalQuestion(
+        id=str(uuid4()),
+        topic_id="algebraic_fractions",
+        difficulty=difficulty,
+        statement=statement,
+        options=options,
+        correct_option_id=correct_id,
+        explanation=explanation,
+        source_expression=source_expression,
+        correct_expression=correct_expression,
+    )
+    validate_question(question)
+    return question
+
+
+def generate_remediation_variation(
+    difficulty: str,
+    exclude_params: set[tuple] | None = None,
+    rng: random.Random | None = None,
+) -> InternalQuestion:
+    """Generate an unseen remediation question variation from the same family."""
+    exclude = set(exclude_params or ())
+    valid_pool = [p for p in get_all_valid_parameters(difficulty) if p not in exclude]
+    if not valid_pool:
+        raise ParameterSpaceExhaustedError(
+            f"All parameter combinations for {difficulty} algebraic fractions have been exhausted ({len(exclude)} used)."
+        )
+    r = rng or random.SystemRandom()
+    chosen_params = r.choice(valid_pool)
+    return build_question_from_parameters(difficulty, chosen_params, rng=r)
+
+
 def generate_question(difficulty: str, rng: random.Random | None = None) -> InternalQuestion:
     if difficulty not in {"easy", "medium", "hard"}:
         raise ValueError("Difficulty must be easy, medium, or hard.")
 
     r = rng or random.SystemRandom()
-    max_attempts = 50
-
-    for _ in range(max_attempts):
-        if difficulty == "easy":
-            b = r.randint(1, 5)
-            a = r.randint(b + 1, 9)
-            if a == 3 * b:
-                a += 1
-
-            statement = f"Simplify: {a}/x + {b}/x (where x != 0)"
-            source_expression = f"{a}/x + {b}/x"
-            correct_expression = f"{a + b}/x"
-            explanation = (
-                f"The fractions have a common denominator x. Add the numerators: "
-                f"({a} + {b})/x = {a + b}/x (where x != 0)."
-            )
-
-            raw_options = [
-                (f"{a + b}/x", None),
-                (f"{a + b}/(2*x)", "DENOMINATOR_ADDITION"),
-                (f"{a * b}/x", "NUMERATOR_OPERATION_CONFUSION"),
-                (f"{a - b}/x", "SIGN_ERROR"),
-            ]
-
-        elif difficulty == "medium":
-            k = r.randint(2, 4)
-            b = r.randint(1, 4)
-            a = r.randint(b + 1, 6)
-
-            statement = f"Simplify: {a}/x - {b}/({k}*x) (where x != 0)"
-            source_expression = f"{a}/x - {b}/({k}*x)"
-            correct_expression = f"{k * a - b}/({k}*x)"
-            explanation = (
-                f"The least common denominator of x and {k}x is {k}x. Scale the first fraction: "
-                f"({k}*{a} - {b})/({k}x) = ({k * a} - {b})/({k}x) = {k * a - b}/({k}x) (where x != 0)."
-            )
-
-            raw_options = [
-                (f"{k * a - b}/({k}*x)", None),
-                (f"{a - b}/({k + 1}*x)", "DENOMINATOR_ADDITION"),
-                (f"{a - b}/({k}*x)", "UNSCALED_NUMERATOR"),
-                (f"{k * a + b}/({k}*x)", "SIGN_ERROR"),
-            ]
-
-        else:  # hard
-            b = r.randint(1, 4)
-            d = r.randint(b + 1, 6)
-            c = r.randint(1, 3)
-            a = r.randint(c + 1, 5)
-
-            statement = f"Simplify: {a}/(x + {b}) - {c}/(x + {d}) (where x != -{b} and x != -{d})"
-            source_expression = f"{a}/(x + {b}) - {c}/(x + {d})"
-            correct_expression = f"({_as_linear(a - c, a * d - c * b)})/((x + {b})*(x + {d}))"
-            explanation = (
-                f"The common denominator is (x + {b})(x + {d}). Expand and subtract the numerators: "
-                f"[{a}(x + {d}) - {c}(x + {b})]/[(x + {b})(x + {d})] = "
-                f"[{a}x + {a * d} - {c}x - {c * b}]/[(x + {b})(x + {d})] = "
-                f"({_as_linear(a - c, a * d - c * b)})/((x + {b})(x + {d})) (where x != -{b} and x != -{d})."
-            )
-
-            raw_options = [
-                (f"({_as_linear(a - c, a * d - c * b)})/((x + {b})*(x + {d}))", None),
-                (f"({_as_linear(a - c, a * d + c * b)})/((x + {b})*(x + {d}))", "SIGN_DISTRIBUTION_ERROR"),
-                (f"{a - c}/(2*x + {b + d})", "DENOMINATOR_ADDITION"),
-                (f"{a - c}/((x + {b})*(x + {d}))", "UNSCALED_NUMERATOR"),
-            ]
-
-        if len({text for text, _ in raw_options}) != 4:
-            continue
-
-        correct_id = str(uuid4())
-        options = [
-            InternalOption(
-                id=correct_id if label is None else str(uuid4()),
-                text=text,
-                misconception=label,
-            )
-            for text, label in raw_options
-        ]
-        r.shuffle(options)
-
-        question = InternalQuestion(
-            id=str(uuid4()),
-            topic_id="algebraic_fractions",
-            difficulty=difficulty,
-            statement=statement,
-            options=options,
-            correct_option_id=correct_id,
-            explanation=explanation,
-            source_expression=source_expression,
-            correct_expression=correct_expression,
-        )
-
-        try:
-            validate_question(question)
-            return question
-        except Exception:
-            continue
-
-    raise RuntimeError(
-        f"Failed to generate a valid algebraic fractions question for difficulty {difficulty!r} after {max_attempts} attempts."
-    )
+    valid_pool = get_all_valid_parameters(difficulty)
+    chosen_params = r.choice(valid_pool)
+    return build_question_from_parameters(difficulty, chosen_params, rng=r)
 
 
 def validate_question(question: InternalQuestion) -> None:

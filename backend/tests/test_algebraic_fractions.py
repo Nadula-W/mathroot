@@ -1450,3 +1450,59 @@ def test_canonical_question_data_and_grading_unchanged():
         assert "statement" in ft_unreviewed["translation_warnings"]
         assert "explanation" in ft_unreviewed["translation_warnings"]
         assert ft_unreviewed["translations"]["si"] == {}
+
+
+# --- Remediation parameter space and extraction tests ---
+
+def test_parameter_space_counts():
+    easy_params = manual.get_all_valid_parameters("easy")
+    assert len(easy_params) == 33
+    assert len(set(easy_params)) == 33
+    for a, b in easy_params:
+        assert 1 <= b < a <= 9
+        assert a != 3 * b
+
+    medium_params = manual.get_all_valid_parameters("medium")
+    assert len(medium_params) == 45
+    assert len(set(medium_params)) == 45
+    for a, b, k in medium_params:
+        assert 2 <= k <= 4
+        assert 1 <= b < a <= 6
+
+    hard_params = manual.get_all_valid_parameters("hard")
+    assert len(hard_params) == 150
+    assert len(set(hard_params)) == 150
+    for a, b, c, d in hard_params:
+        assert 1 <= b < d <= 6
+        assert 1 <= c < a <= 5
+
+    with pytest.raises(ValueError, match="Invalid difficulty"):
+        manual.get_all_valid_parameters("extreme")
+
+
+def test_parameter_extraction_and_rebuilding():
+    for diff in ["easy", "medium", "hard"]:
+        q = manual.generate_question(diff)
+        family, params = manual.extract_question_parameters(q)
+        assert family == diff
+        rebuilt = manual.build_question_from_parameters(diff, params)
+        manual.validate_question(rebuilt)
+        rebuilt_family, rebuilt_params = manual.extract_question_parameters(rebuilt)
+        assert rebuilt_family == diff
+        assert rebuilt_params == params
+
+
+def test_parameter_space_exhaustion_raises():
+    all_easy = set(manual.get_all_valid_parameters("easy"))
+    with pytest.raises(manual.ParameterSpaceExhaustedError, match="exhausted"):
+        manual.generate_remediation_variation("easy", exclude_params=all_easy)
+
+
+def test_generate_remediation_variation_excludes_seen():
+    all_easy = manual.get_all_valid_parameters("easy")
+    # Exclude all except one pair
+    target = all_easy[0]
+    exclude = set(all_easy[1:])
+    var = manual.generate_remediation_variation("easy", exclude_params=exclude)
+    _, params = manual.extract_question_parameters(var)
+    assert params == target

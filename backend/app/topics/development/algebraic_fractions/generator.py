@@ -26,6 +26,29 @@ def generate_question(difficulty: str) -> InternalQuestion:
     return question
 
 
+def generate_remediation_question(
+    difficulty: str,
+    exclude_params: set[tuple] | None = None,
+) -> InternalQuestion:
+    """Generate an unseen remediation question variation from the same family.
+
+    AI parameter selection is attempted when configured, strictly validated against
+    the exclusion set, and falls back to deterministic manual variations if AI fails
+    or produces previously used parameters.
+    """
+    exclude = set(exclude_params or ())
+    if ai.configuration()["mode"] == "manual":
+        return manual.generate_remediation_variation(difficulty, exclude_params=exclude)
+    try:
+        question = ai.generate_remediation_question(difficulty, exclude_params=exclude)
+        manual.validate_question(question)
+        return question
+    except Exception:
+        question = manual.generate_remediation_variation(difficulty, exclude_params=exclude)
+    manual.validate_question(question)
+    return question
+
+
 class AlgebraicFractionsTopic:
     topic_id = "algebraic_fractions"
     title = "Algebraic Fractions"
@@ -40,6 +63,11 @@ class AlgebraicFractionsTopic:
 
     def generate_question(self, difficulty: str) -> InternalQuestion:
         return generate_question(difficulty)
+
+    def generate_remediation_question(
+        self, difficulty: str, exclude_params: set[tuple] | None = None
+    ) -> InternalQuestion:
+        return generate_remediation_question(difficulty, exclude_params=exclude_params)
 
     def feedback(self, question: InternalQuestion, misconception: str | None) -> str:
         return manual.feedback(question, misconception)

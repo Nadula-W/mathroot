@@ -551,6 +551,20 @@ def generate_question(difficulty: str) -> InternalQuestion:
     return question
 
 
+def generate_remediation_question(
+    difficulty: str,
+    exclude_params: set[tuple] | None = None,
+) -> InternalQuestion:
+    exclude = set(exclude_params or ())
+    q = generate_question(difficulty)
+    _, params = manual.extract_question_parameters(q)
+    if params in exclude:
+        raise ValueError(
+            f"AI generated parameter combination {params} which was already used in this remediation chain."
+        )
+    return q
+
+
 def analyze_answer(context: dict) -> Analysis:
     cfg = configuration()
     if cfg.get("mode") == "manual":
