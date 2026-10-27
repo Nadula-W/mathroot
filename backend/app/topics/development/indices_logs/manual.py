@@ -219,9 +219,44 @@ def verify_answer(question: InternalQuestion, option_id: str) -> bool:
     return option_id == question.correct_option_id
 
 
+# ---------- Part 4: diagnosis text ----------
+
+MISCONCEPTIONS = {
+    "MULTIPLIED_EXPONENTS": "The exponents were multiplied instead of added.",
+    "MULTIPLIED_BASES": "The bases were multiplied as well as the exponents being added.",
+    "SUBTRACTED_EXPONENTS": "The exponents were subtracted when they should be added.",
+    "ADDED_EXPONENTS": "The exponents were added when they should be subtracted.",
+    "DIVIDED_EXPONENTS": "The exponents were divided instead of subtracted.",
+    "DIVIDED_BASES": "The bases were divided instead of keeping the same base.",
+}
+
+_FEEDBACK = {
+    "MULTIPLIED_EXPONENTS": "You may have multiplied the exponents. When you MULTIPLY powers with the same base, you add the exponents.",
+    "MULTIPLIED_BASES": "You may have multiplied the bases. The base stays the same; only the exponents change.",
+    "SUBTRACTED_EXPONENTS": "You may have subtracted the exponents. Subtracting is for division, not for multiplication.",
+    "ADDED_EXPONENTS": "You may have added the exponents. When you DIVIDE powers with the same base, you subtract the exponents.",
+    "DIVIDED_EXPONENTS": "You may have divided the exponents. Divide the powers by subtracting the exponents.",
+    "DIVIDED_BASES": "You may have divided the bases. The base stays the same; only the exponents change.",
+}
+
+_RECOMMENDATIONS = {
+    "MULTIPLIED_EXPONENTS": "Expand a small example such as 2^2 x 2^3 as 2x2x2x2x2 to show why exponents are added, then practise the product law.",
+    "MULTIPLIED_BASES": "Stress that the base is written once: show 2^2 x 2^3 = 2^5, then compare with (2x2)^5.",
+    "SUBTRACTED_EXPONENTS": "Contrast the product law (add) and the quotient law (subtract) side by side with two short examples.",
+    "ADDED_EXPONENTS": "Expand 6^5 / 6^2 as a fraction and cancel common factors to show the exponents are subtracted.",
+    "DIVIDED_EXPONENTS": "Show that dividing powers cancels factors, so the exponents are subtracted, never divided.",
+    "DIVIDED_BASES": "Cancel factors in a worked example: the base remains, only the number of factors changes.",
+}
+
+
 def feedback(question: InternalQuestion, misconception: str | None) -> str:
-    raise NotImplementedError("Implement indices_logs manual feedback.")
+    if misconception is None:
+        return "Correct. " + question.explanation
+    hint = _FEEDBACK.get(misconception, "Review the laws of indices.")
+    return hint + " " + question.explanation
 
 
 def teaching_recommendation(misconception: str) -> str:
-    raise NotImplementedError("Implement indices_logs teaching recommendations.")
+    return _RECOMMENDATIONS.get(
+        misconception, "Review the laws of indices with another worked example."
+    )
