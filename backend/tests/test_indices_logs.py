@@ -73,3 +73,29 @@ def test_verify_answer():
     assert verify_answer(question, wrong.id) is False
     with pytest.raises(ValueError):
         verify_answer(question, "not-an-id")
+
+@pytest.mark.parametrize("law", ["product", "quotient"])
+def test_each_law_generates_valid_questions(law):
+    rng = random.Random(11)
+    for _ in range(200):
+        validate_question(generate_question("easy", rng, law=law))
+
+
+def test_quotient_has_expected_codes():
+    question = generate_question("easy", random.Random(12), law="quotient")
+    codes = {o.misconception for o in question.options}
+    assert codes == {None, "ADDED_EXPONENTS", "DIVIDED_EXPONENTS", "DIVIDED_BASES"}
+
+
+def test_zero_denominator_is_rejected():
+    question = generate_question("easy", random.Random(13), law="quotient")
+    options = list(question.options)
+    options[0] = replace(options[0], text="6^(5/0)")
+    with pytest.raises(ValueError):
+        validate_question(replace(question, options=options))
+
+
+def test_unknown_law_is_rejected():
+    with pytest.raises(ValueError):
+        generate_question("easy", random.Random(14), law="cubic")
+        
