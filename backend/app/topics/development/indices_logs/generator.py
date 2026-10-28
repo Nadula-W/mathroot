@@ -29,8 +29,8 @@ def generate_question(difficulty: str) -> InternalQuestion:
 class IndicesLogsTopic:
     topic_id = "indices_logs"
     title = "Indices and Logarithms"
-    # TODO: Populate with stable codes supported by your diagnostic distractors.
-    misconception_definitions: dict[str, str] = {}
+   
+    misconception_definitions: dict[str, str] = manual.MISCONCEPTIONS
 
     def generate_question(self, difficulty: str) -> InternalQuestion:
         return generate_question(difficulty)
