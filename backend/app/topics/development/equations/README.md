@@ -1,45 +1,54 @@
-# Nimsara — Equations
+﻿# Nimsara — Equations
 
-This is an unfinished workspace for topic ID `equations`. It is not registered or ready. No completed Mathematics implementation is provided.
+Implemented and registered as `equations` in `app/topics/__init__.py`. Other members' implementations are unchanged.
 
-1. **Question generation:** implement the provider call and JSON conversion in `ai.generate_question`; `generator.generate_question` validates AI questions and automatically tries the manual generator on AI errors. Keep the original `InternalQuestion` / `InternalOption` contract in `app/contracts.py`.
-2. **Answer analysis:** implement `ai.analyze_answer` and use `verifier.verify_answer` for independent checks. It delegates to the existing shared verifier; do not duplicate grading or fallback. Stable misconception codes belong in `EquationsTopic.misconception_definitions`. Attach codes only to justified distractors.
-3. **Your provider:** choose Ollama, Gemini, OpenRouter or another service in `ai.py`. No provider or Nadula model is forced. Configure a finite HTTP timeout, validate structured output, and raise on service/validation failures. Shared verification accepts only grounded `Analysis` feedback and retains deterministic correctness. Never include student identities, auth tokens or database keys in model requests.
-4. **Manual fallback:** implement `manual.generate_question`, `validate_question`, `feedback` and `teaching_recommendation`. The supplied MCQ checker compares the selected ID with the independently validated key. Use SymPy/deterministic rules appropriate to this topic, including domain restrictions. AI failure triggers fallback automatically once these TODOs are implemented. Until then, `NotImplementedError` is intentional.
-5. **Independent testing:** add tests under `backend/tests/test_equations.py`. Run from `backend`: `.\.venv\Scripts\python.exe -m pytest tests/test_equations.py -q`. Mock provider success, timeout, bad JSON, wrong AI grade and missing credentials; verify manual fallback, unique options, explanations and every generated key (100 questions per difficulty). No test file or completed question is supplied here. Test direct functions without changing the registry.
-6. **Register only when complete:** in `app/topics/__init__.py`, import `from app.topics.development.equations.generator import EquationsTopic`, add `"equations": EquationsTopic()` to `TOPICS`, and change only the corresponding `PLANNED_TOPICS` item to `ready: True`. Do not remove existing topics. The adapter already supplies the existing TopicModule methods and optional `answer_feedback_provider` hook. The shared FastAPI submission route uses that hook, so your own provider is used without frontend/database changes. Persistence, class permissions, results and teacher aggregation stay in the shared backend.
+## Supported mathematics
 
-## Backend environment
+- Easy: one-variable linear equations with the variable on one side.
+- Medium: linear equations with variables on both sides.
+- Hard: bracketed linear equations, signed coefficients and possible rational solutions.
 
-Put real values in ignored `backend/.env` or your process environment, never in source files. Do not create `NEXT_PUBLIC_` keys. Environment files are not supplied with secrets.
+Each generated question has four distinct shuffled options with opaque UUIDs. Exact `Fraction` arithmetic independently checks the unique solution, each diagnostic distractor, canonical statement and worked explanation. The validator accepts bounded integer-coefficient templates only; it never evaluates source text as Python or passes untrusted strings to a symbolic evaluator. Invalid or duplicate variants are rejected.
+
+Diagnostic choices signal possible inverse-sign errors, missing division or a negated solution. One selection does not prove a misconception. Feedback includes trusted steps and specific teacher guidance.
+
+Unsupported: quadratic/simultaneous equations, inequalities, variable denominators, identities, equations without a solution, word problems, free-text and handwritten answers.
+
+## Manual and AI operation
+
+Manual mode is the default and works offline. The topic's settings are independent of Binomial. An optional Ollama adapter uses the existing `httpx` dependency; no new SDK is required. Put settings in your ignored backend environment or process environment:
 
 ```dotenv
-MATHROOT_EQUATIONS_MODE=auto
-MATHROOT_EQUATIONS_PROVIDER=your_chosen_provider
-MATHROOT_EQUATIONS_MODEL=your_chosen_model
-MATHROOT_EQUATIONS_BASE_URL=your_chosen_endpoint
-MATHROOT_EQUATIONS_API_KEY=your_private_key_if_needed
+MATHROOT_EQUATIONS_MODE=manual
+MATHROOT_EQUATIONS_PROVIDER=ollama
+MATHROOT_EQUATIONS_MODEL=
+MATHROOT_EQUATIONS_BASE_URL=http://127.0.0.1:11434
 MATHROOT_EQUATIONS_TIMEOUT_SECONDS=4
 ```
 
-These are inputs for your implementation, not a prebuilt provider client. Parse/bound `timeout_seconds` before using it. Local Ollama normally needs no API key. Set `MATHROOT_EQUATIONS_MODE=manual` to skip topic AI calls. Shared `MATHROOT_ANSWER_VERIFIER=manual` also skips AI verification for all topics; leave it `auto` to test your provider. Question generation mode here is independent of Nadula's `MATHROOT_GENERATOR`.
+To enable AI, select `MODE=auto` and set `MODEL` to a model available on your Ollama server. `API_KEY` is optional for an authenticated compatible endpoint; never commit credentials or put them in frontend settings. Other provider names are rejected and generation falls back to manual. No request occurs on import.
 
-For a smoke check, from `backend` run:
+The model proposes only a bounded equation source. The module derives its options, key and explanation locally, independently of model claims. HTTP errors, missing configuration, invalid JSON/schema, invalid mathematics and oversized responses fall back to manual generation. Timeouts are bounded to 0.1–4 seconds (invalid values use 4). Responses are limited to 32 KB.
+
+Answer analysis uses this topic's adapter through the shared verifier. Grades remain deterministic; inconsistent grades, unsupported diagnoses, low confidence or ungrounded prose are rejected. `MATHROOT_ANSWER_VERIFIER=manual` disables AI feedback globally. Model requests contain mathematical context only, with no user identity, sessions or database keys.
+
+## English and Sinhala
+
+`presentation.py` supplies Sinhala templates for instructions, checked working, feedback, corrective guidance and teacher recommendations without a model. Canonical expressions, options, IDs and grades stay unchanged. Unknown historical wording stays English with a translation warning.
+
+An optional topic-owned translation adapter retains mathematical placeholders and uses the same bounded provider connection. The shared guard rejects missing/reordered tokens and new mathematical content. Semantic validation accepts only exact equivalents of known topic templates; arbitrary fluent output is insufficient. AI translation cannot change an answer or invent approved wording.
+
+## Testing
+
+From the repository root:
 
 ```powershell
-.\.venv\Scripts\python.exe -c "from app.topics.development.equations.generator import EquationsTopic; print(EquationsTopic.topic_id)"
+Push-Location backend
+..\.venv\Scripts\python.exe -m pytest tests/test_equations.py -q -p no:cacheprovider
+..\.venv\Scripts\python.exe -m pytest tests -q -p no:cacheprovider
+Pop-Location
 ```
 
-The import should work; generating or verifying a question intentionally raises until your TODOs are complete. Run the existing suite with `.\.venv\Scripts\python.exe -m pytest tests -q -p no:cacheprovider` before integration.
+Tests cover at least 100 generated variants per difficulty, independent substitution of every option, tampered questions, provider success/timeouts/bad JSON/schema/invalid mathematics/oversized responses, missing configuration, incorrect AI grades, bilingual math preservation, translation rejection and full assessment submission/reporting. HTTP is mocked; no live model or credentials are required. Full application fixtures also require the shared backend's Supabase dependency, installed in the local test environment.
 
-References: `app/topics/development/binomial/manual.py`, `app/topics/development/binomial/generator.py`, `app/topics/base.py`, `app/answer_verification.py` and `docs/TOPIC_CONTRACT.md`. Use their inputs/outputs as examples, not a requirement to use their provider. Trusted worked explanations must be independently checked; do not execute untrusted mathematical input as Python.
-
-## English and Sinhala without changing Mathematics
-
-1. Implement reviewed bilingual wording in the topic class's `presentation_text(field, text, question=None, misconception=None)` hook in `generator.py`. Use complete known templates or deterministic structured data. Return Sinhala only for wording you have checked; return `None` otherwise. Cover question instructions, worked explanations, misconception feedback, corrective guidance and teaching recommendations. Keep this manual wording available with every AI service off.
-2. Keep `InternalQuestion` canonical. Never generate a second question, change an option ID/order, rewrite a mathematical expression, or create a different correct key for Sinhala. Shared `app.presentation` adds response-only `translations.si` / `translation_warnings`; the frontend selects text immediately without a language API parameter or database change.
-3. For optional dynamic prose, implement `ai.TopicTranslationProvider.translate(masked_text)` using your own configuration/provider. Preserve each `[[MATH_n]]` token exactly once in order, enforce a finite timeout, and raise on bad JSON/service failure. No provider or API key is supplied by this starter.
-4. Implement `validate_translation(field, source, translated, question=None)` using reviewed pairs or deterministic topic templates. It must return exactly `True` before AI text is displayed. Placeholder checks alone cannot verify meaning. Its starter return value is `False`, so unfinished translation safely keeps English with a warning.
-5. Test both reviewed manual wording and valid/invalid provider responses. Confirm unchanged IDs, expressions, correct keys and scores; reject missing/reordered tokens, added numbers/formulas, altered meaning and provider failure. Reuse the existing shared grader and fallback instead of translating an AI answer into a new key. Do not mark this topic ready until the Mathematics and both fallback/display paths are complete.
-
-Use `binomial/presentation.py` as a template example, not a model/provider requirement. The shared `TranslationProvider` interface also permits a custom `cache_key` to distinguish provider/model settings. Approved results are cached in memory, but topic semantic validation runs again on reuse. Your topic's `MODE=manual` prevents its provider calls; reviewed wording should still work. Keep keys in your ignored backend environment and never in `NEXT_PUBLIC_` variables. See `docs/TOPIC_CONTRACT.md` for the full optional contract.
+Two pre-existing tests assume Binomial is the only ready topic (in `test_binomial.py` and `test_bilingual_assessments.py`). Those assertions are obsolete after registering Equations. They are left untouched to preserve other members' work; the equations assessment tests verify the new registration and behavior.
