@@ -1,9 +1,6 @@
-"""Bopage: AI-first question generation and the existing TopicModule adapter.
-
-Unfinished: do not register this topic until manual and AI paths are validated.
-"""
+"""Bopage: AI-first question generation and the existing TopicModule adapter."""
 from app.contracts import InternalQuestion
-from . import ai, manual
+from . import ai, manual, presentation
 
 
 def generate_question(difficulty: str) -> InternalQuestion:
@@ -29,8 +26,7 @@ def generate_question(difficulty: str) -> InternalQuestion:
 class FactorizationTopic:
     topic_id = "factorization"
     title = "Factors of Quadratic Expressions"
-    # TODO: Populate with stable codes supported by your diagnostic distractors.
-    misconception_definitions: dict[str, str] = {}
+    misconception_definitions: dict[str, str] = manual.MISCONCEPTIONS
 
     def generate_question(self, difficulty: str) -> InternalQuestion:
         return generate_question(difficulty)
@@ -41,23 +37,21 @@ class FactorizationTopic:
     def teaching_recommendation(self, misconception: str) -> str:
         return manual.teaching_recommendation(misconception)
 
+    def verification_feedback(self, question: InternalQuestion, misconception: str | None, correct: bool):
+        return manual.verification_feedback(question, misconception, correct)
+
     def answer_feedback_provider(self):
         # The shared verifier calls this optional hook after registration.
         return ai.TopicFeedbackProvider()
 
-
     def presentation_text(self, field: str, text: str, question=None, misconception=None):
-        # TODO: Match reviewed English/Sinhala templates by exact full text.
-        # Cover statement, explanation, feedback and teaching recommendations.
-        # Keep every mathematical expression unchanged. None means English + warning.
-        return None
+        return presentation.presentation_text(field, text, question=question, misconception=misconception)
 
     def translation_provider(self):
         # Optional: use this topic's own provider, never Nadula's configuration.
         return ai.TopicTranslationProvider()
 
     def validate_translation(self, field: str, source: str, translated: str, question=None) -> bool:
-        # TODO: Semantically approve only reviewed pairs or deterministic topic
-        # templates. Placeholder checks alone cannot prove a translation correct.
-        # Until implemented, all AI translations safely remain English.
-        return False
+        # Semantically approve only reviewed pairs or deterministic topic templates.
+        reviewed = self.presentation_text(field, source, question=question)
+        return reviewed is not None and reviewed == translated
