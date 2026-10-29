@@ -166,18 +166,58 @@ def _power_value(text: str):
     return _checked_power(base, int(match[3]), int(match[4]))
 
 
+_CODES_BY_LAW = {
+    "product": {"MULTIPLIED_EXPONENTS", "MULTIPLIED_BASES", "SUBTRACTED_EXPONENTS"},
+    "quotient": {"ADDED_EXPONENTS", "DIVIDED_EXPONENTS", "DIVIDED_BASES"},
+}
+
+
+def _parse_source(source_expression: str):
+    """Return (law, base, m, n) from a source expression."""
+    text = source_expression.strip()
+    for law, pattern in (("product", _PRODUCT), ("quotient", _QUOTIENT)):
+        match = pattern.fullmatch(text)
+        if match:
+            b1, m, b2, n = (int(g) for g in match.groups())
+            if b1 != b2:
+                raise ValueError("Both powers must have the same base.")
+            return law, b1, m, n
+    raise ValueError("Unknown question pattern.")
+
+
 def _expected_value(source_expression: str):
     """Work out the true answer from the source expression."""
-    text = source_expression.strip()
-    match = _PRODUCT.fullmatch(text)
-    if match:
-        b1, m, b2, n = (int(g) for g in match.groups())
-        return _checked_power(b1, m) * _checked_power(b2, n)
-    match = _QUOTIENT.fullmatch(text)
-    if match:
-        b1, m, b2, n = (int(g) for g in match.groups())
-        return _checked_power(b1, m) / _checked_power(b2, n)
-    raise ValueError("Unknown question pattern.")
+    law, base, m, n = _parse_source(source_expression)
+    if law == "product":
+        return _checked_power(base, m) * _checked_power(base, n)
+    return _checked_power(base, m) / _checked_power(base, n)
+
+
+def _evidence_value(code: str, base: int, m: int, n: int):
+    """The exact wrong value a student gets when they make this mistake."""
+    if code == "MULTIPLIED_EXPONENTS":
+        return _checked_power(base, m * n)
+    if code == "MULTIPLIED_BASES":
+        return _checked_power(base * base, m + n)
+    if code == "SUBTRACTED_EXPONENTS":
+        return _checked_power(base, abs(m - n))
+    if code == "ADDED_EXPONENTS":
+        return _checked_power(base, m + n)
+    if code == "DIVIDED_EXPONENTS":
+        return _checked_power(base, m, n)
+    if code == "DIVIDED_BASES":
+        return Integer(1)  # (base / base) = 1
+    raise ValueError(f"Unknown misconception code: {code}")
+
+
+def explain(source_expression: str) -> str:
+    """Trusted explanation text, written by us (never by the AI)."""
+    law, base, m, n = _parse_source(source_expression)
+    if law == "product":
+        return (f"Same base, so ADD the exponents: {m} + {n} = {m + n}. "
+                f"The answer is {base}^{m + n}.")
+    return (f"Same base, so SUBTRACT the exponents: {m} - {n} = {m - n}. "
+            f"The answer is {base}^{m - n}.")
 
 
 def validate_question(question: InternalQuestion) -> None:
@@ -191,6 +231,7 @@ def validate_question(question: InternalQuestion) -> None:
     if question.correct_option_id not in ids:
         raise ValueError("correct_option_id is not one of the options.")
 
+    law, base, m, n = _parse_source(question.source_expression)
     expected = _expected_value(question.source_expression)
     if _power_value(question.correct_expression) != expected:
         raise ValueError("correct_expression does not match the source expression.")
@@ -205,6 +246,12 @@ def validate_question(question: InternalQuestion) -> None:
             raise ValueError("Every wrong option needs a misconception code.")
         if is_key != (value == expected):
             raise ValueError("Key and distractor values do not match the true answer.")
+        if not is_key:
+            code = option.misconception
+            if code not in _CODES_BY_LAW[law]:
+                raise ValueError(f"Code {code} does not belong to the {law} law.")
+            if value != _evidence_value(code, base, m, n):
+                raise ValueError(f"Option {option.text} is not evidence for {code}.")
         values.append(value)
 
     if len(set(values)) != 4:

@@ -99,3 +99,15 @@ def test_unknown_law_is_rejected():
     with pytest.raises(ValueError):
         generate_question("easy", random.Random(14), law="cubic")
         
+def test_swapped_codes_are_rejected():
+    question = generate_question("easy", random.Random(21), law="product")
+    wrong = [o for o in question.options if o.id != question.correct_option_id]
+    a, b = wrong[0], wrong[1]
+    options = [
+        replace(o, misconception=b.misconception) if o.id == a.id
+        else replace(o, misconception=a.misconception) if o.id == b.id
+        else o
+        for o in question.options
+    ]
+    with pytest.raises(ValueError):
+        validate_question(replace(question, options=options))
