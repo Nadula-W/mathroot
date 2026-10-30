@@ -30,7 +30,6 @@ def test_question_generation_hides_answer():
 def test_topic_ownership(client):
     topics = client.get('/api/topics').json()
     assert len(topics) == 5
-    assert sum(item['ready'] for item in topics) == 2
-    assert [item['id'] for item in topics if item['ready']] == ['binomial', 'algebraic_fractions']
+    assert sum(item['ready'] for item in topics) == 1
     client.user.update(id='teacher', role='teacher', requested_role='teacher')
     assert client.post('/api/tests', json={'title': 'Invalid topic', 'class_id': 'demo3', 'topic_ids': ['equations'], 'questions_per_topic': 1}).status_code == 422

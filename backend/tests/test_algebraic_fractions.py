@@ -1506,3 +1506,91 @@ def test_generate_remediation_variation_excludes_seen():
     var = manual.generate_remediation_variation("easy", exclude_params=exclude)
     _, params = manual.extract_question_parameters(var)
     assert params == target
+
+
+def test_all_valid_parameter_tuples_produce_valid_questions():
+    """Exhaustively verify all 33 easy, 45 medium, and 150 hard parameter tuples produce valid questions."""
+    topic = AlgebraicFractionsTopic()
+    valid_misconceptions = set(topic.misconception_definitions.keys())
+
+    for diff, expected_count in [("easy", 33), ("medium", 45), ("hard", 150)]:
+        all_params = manual.get_all_valid_parameters(diff)
+        assert len(all_params) == expected_count
+        assert len(set(all_params)) == expected_count
+
+        for params in all_params:
+            q = manual.build_question_from_parameters(diff, params)
+            manual.validate_question(q)
+            assert q.topic_id == "algebraic_fractions"
+            assert q.difficulty == diff
+            assert "where x !=" in q.statement
+            assert "where x !=" in q.explanation
+            assert len(q.options) == 4
+            assert len({opt.id for opt in q.options}) == 4
+            assert len({opt.text for opt in q.options}) == 4
+
+            correct_opts = [opt for opt in q.options if opt.id == q.correct_option_id]
+            assert len(correct_opts) == 1
+            assert correct_opts[0].misconception is None
+
+            distractors = [opt for opt in q.options if opt.id != q.correct_option_id]
+            assert len(distractors) == 3
+            for d in distractors:
+                assert d.misconception in valid_misconceptions
+
+
+def test_ai_remediation_generation_fallback_on_error(monkeypatch):
+    monkeypatch.setattr(
+        ai,
+        "configuration",
+        lambda: {"mode": "auto", "model": "qwen2.5:math", "timeout_seconds": 4},
+    )
+
+    ai_attempted = False
+
+    def mock_ai_fail(difficulty, exclude_params=None):
+        nonlocal ai_attempted
+        ai_attempted = True
+        raise RuntimeError("AI model timeout")
+
+    monkeypatch.setattr(ai, "generate_remediation_question", mock_ai_fail)
+
+    topic = AlgebraicFractionsTopic()
+    exclude = {(2, 1)}
+    # When AI fails, topic should fall back to manual variation
+    q = topic.generate_remediation_question("easy", exclude_params=exclude)
+    assert ai_attempted, "Expected mocked AI remediation path to be attempted before fallback."
+    manual.validate_question(q)
+    _, params = manual.extract_question_parameters(q)
+    assert params not in exclude
+
+
+def test_ai_remediation_generation_rejects_duplicate_parameters(monkeypatch):
+    monkeypatch.setattr(
+        ai,
+        "configuration",
+        lambda: {"mode": "auto", "model": "qwen2.5:math", "timeout_seconds": 4},
+    )
+
+    ai_calls = 0
+    # Suppose AI generates a question with parameters (3, 2)
+    ai_q = manual.build_question_from_parameters("easy", (3, 2))
+
+    def mock_generate_question(difficulty):
+        nonlocal ai_calls
+        ai_calls += 1
+        return ai_q
+
+    monkeypatch.setattr(ai, "generate_question", mock_generate_question)
+
+    # Calling ai.generate_remediation_question with (3, 2) in exclude_params must raise ValueError
+    with pytest.raises(ValueError, match="already used"):
+        ai.generate_remediation_question("easy", exclude_params={(3, 2)})
+    assert ai_calls == 1
+
+    # Calling generator.generate_remediation_question falls back to manual and gives unseen params
+    q = generator.generate_remediation_question("easy", exclude_params={(3, 2)})
+    assert ai_calls == 2, "Expected mocked AI path to be attempted before falling back to manual."
+    manual.validate_question(q)
+    _, params = manual.extract_question_parameters(q)
+    assert params != (3, 2)
