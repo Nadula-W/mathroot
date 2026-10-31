@@ -23,6 +23,15 @@ GOOD_QUOTIENT = {
     ],
 }
 
+GOOD_POWER = {
+    "options": [
+        {"text": "2^6", "misconception": None},
+        {"text": "2^5", "misconception": "ADDED_EXPONENTS_POWER"},
+        {"text": "2 × 2^3", "misconception": "EXPONENT_AS_MULTIPLIER"},
+        {"text": "2^9", "misconception": "POWER_ONLY_ON_EXPONENT"},
+    ],
+}
+
 
 def _copy(payload):
     return json.loads(json.dumps(payload))
@@ -34,8 +43,11 @@ def configured(monkeypatch):
     monkeypatch.setenv("MATHROOT_INDICES_LOGS_MODEL", "fake-model")
 
 
-SPECS = {"product": ("product", 3, 4, 2), "quotient": ("quotient", 6, 5, 2)}
-
+SPECS = {
+    "product": ("product", 3, 4, 2),
+    "quotient": ("quotient", 6, 5, 2),
+    "power": ("power", 2, 3, 2),
+}
 
 def _fake_model(monkeypatch, payload, law):
     """Pretend the model replied with `payload`, and our code picked this law."""
@@ -139,3 +151,18 @@ def test_generator_falls_back_when_ai_lies(configured, monkeypatch):
     question = generator.generate_question("easy")
     manual.validate_question(question)
     assert question.explanation  # a valid question came back anyway
+
+def test_good_power_question_is_accepted(configured, monkeypatch):
+    _fake_model(monkeypatch, GOOD_POWER, "power")
+    question = ai.generate_question("easy")
+    manual.validate_question(question)
+    assert question.statement == "Simplify: (2^3)^2"
+
+
+def test_power_question_with_swapped_codes_is_rejected(configured, monkeypatch):
+    bad = _copy(GOOD_POWER)
+    bad["options"][1]["misconception"] = "POWER_ONLY_ON_EXPONENT"
+    bad["options"][3]["misconception"] = "ADDED_EXPONENTS_POWER"
+    _fake_model(monkeypatch, bad, "power")
+    with pytest.raises(ValueError):
+        manual.validate_question(ai.generate_question("easy"))

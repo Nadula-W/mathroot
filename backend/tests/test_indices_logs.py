@@ -74,7 +74,7 @@ def test_verify_answer():
     with pytest.raises(ValueError):
         verify_answer(question, "not-an-id")
 
-@pytest.mark.parametrize("law", ["product", "quotient"])
+@pytest.mark.parametrize("law", ["product", "quotient", "power"])
 def test_each_law_generates_valid_questions(law):
     rng = random.Random(11)
     for _ in range(200):
@@ -109,5 +109,53 @@ def test_swapped_codes_are_rejected():
         else o
         for o in question.options
     ]
+    with pytest.raises(ValueError):
+        validate_question(replace(question, options=options))
+
+def test_power_has_expected_codes():
+    question = generate_question("easy", random.Random(15), law="power")
+    codes = {o.misconception for o in question.options}
+    assert codes == {
+        None, "ADDED_EXPONENTS_POWER", "EXPONENT_AS_MULTIPLIER", "POWER_ONLY_ON_EXPONENT",
+    }
+
+
+def test_power_options_are_all_different_for_every_spec():
+    from app.topics.development.indices_logs.manual import power_specs
+    assert len(power_specs()) > 5
+    for base, m, n in power_specs():
+        values = {base ** (m * n), base ** (m + n), n * base ** m, base ** (m ** n)}
+        assert len(values) == 4
+
+
+def test_power_codes_must_match_their_values():
+    question = generate_question("easy", random.Random(16), law="power")
+    wrong = [o for o in question.options if o.id != question.correct_option_id]
+    a, b = wrong[0], wrong[1]
+    options = [
+        replace(o, misconception=b.misconception) if o.id == a.id
+        else replace(o, misconception=a.misconception) if o.id == b.id
+        else o
+        for o in question.options
+    ]
+    with pytest.raises(ValueError):
+        validate_question(replace(question, options=options))
+
+
+def test_code_from_another_law_is_rejected_for_power():
+    question = generate_question("easy", random.Random(17), law="power")
+    wrong = next(o for o in question.options if o.id != question.correct_option_id)
+    options = [
+        replace(o, misconception="MULTIPLIED_EXPONENTS") if o.id == wrong.id else o
+        for o in question.options
+    ]
+    with pytest.raises(ValueError):
+        validate_question(replace(question, options=options))
+
+
+def test_unreadable_multiple_is_rejected():
+    question = generate_question("easy", random.Random(18), law="power")
+    options = list(question.options)
+    options[0] = replace(options[0], text="2 x x 2^3")
     with pytest.raises(ValueError):
         validate_question(replace(question, options=options))

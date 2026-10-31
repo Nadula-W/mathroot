@@ -60,13 +60,16 @@ _SCHEMA = {
 }
 
 _BASES = [2, 3, 5, 6]
-_OPERATOR = {"product": "×", "quotient": "÷"}
+
 
 
 def _pick_spec() -> tuple[str, int, int, int]:
     """OUR code chooses the law and the numbers. The model never does."""
     rng = random.SystemRandom()
-    law = rng.choice(["product", "quotient"])
+    law = rng.choice(["product", "quotient", "power"])
+    if law == "power":
+        base, m, n = rng.choice(manual.power_specs())  # only specs with 4 different values
+        return law, base, m, n
     base = rng.choice(_BASES)
     if law == "product":
         # m != n, and skip (3, 6) / (6, 3): there two wrong options would be equal
@@ -94,6 +97,13 @@ _EXAMPLES = {  # base 7 is never used in real questions, so it cannot be copied
         '{"text": "7^(7/3)", "misconception": "DIVIDED_EXPONENTS"}, '
         '{"text": "1^4", "misconception": "DIVIDED_BASES"}]}',
     ),
+        "power": (
+        "Simplify: (7^2)^3",
+        '{"options": [{"text": "7^6", "misconception": null}, '
+        '{"text": "7^5", "misconception": "ADDED_EXPONENTS_POWER"}, '
+        '{"text": "3 × 7^2", "misconception": "EXPONENT_AS_MULTIPLIER"}, '
+        '{"text": "7^8", "misconception": "POWER_ONLY_ON_EXPONENT"}]}',
+    ),
 }
 
 
@@ -107,6 +117,16 @@ def _mistakes(law: str, base: int, m: int, n: int) -> tuple[str, str]:
             f"({base} × {base} = {base * base}), so the base becomes {base * base}\n"
             f"  SUBTRACTED_EXPONENTS: the student subtracts the exponents (bigger minus smaller) and keeps the base {base}",
         )
+
+    if law == "power":
+        return (
+            f"multiply the exponents ({m} × {n}) and keep the base {base}",
+            f"  ADDED_EXPONENTS_POWER: the student adds the exponents ({m} + {n}) and keeps the base {base}\n"
+            f"  EXPONENT_AS_MULTIPLIER: the student reads the outer exponent as \"times\": write it as {n} × {base}^{m}\n"
+            f"  POWER_ONLY_ON_EXPONENT: the student raises only the exponent {m} to the power {n} "
+            f"({m}^{n} = {m ** n}) and keeps the base {base}: {base}^{m ** n}",
+        )
+    
     return (
         f"subtract the exponents ({m} - {n}) and keep the base {base}",
         f"  ADDED_EXPONENTS: the student adds the exponents ({m} + {n}) and keeps the base {base}\n"
@@ -120,12 +140,13 @@ def _mistakes(law: str, base: int, m: int, n: int) -> tuple[str, str]:
 def _build_prompt(law: str, base: int, m: int, n: int, difficulty: str) -> str:
     correct_rule, mistakes = _mistakes(law, base, m, n)
     example_question, example_json = _EXAMPLES[law]
+    statement, _ = manual.question_texts(law, base, m, n)
     return (
         "You are helping to write a Grade 10 (Sri Lankan O/L) mathematics multiple-choice question.\n"
-        f"The question is already fixed: Simplify: {base}^{m} {_OPERATOR[law]} {base}^{n}\n"
+        f"The question is already fixed: {statement}\n"
         "Write only the 4 answer options.\n"
         "Rules:\n"
-        "- Each option \"text\" is ONLY a power, like 3^6. No words, no \"=\", no letters.\n"
+        "- Each option \"text\" is ONLY a power like 3^6 (or a product like 3 × 2^4 when the mistake says so). No words, no \"=\", no letters.\n"
         f"- Exactly one option is correct ({correct_rule}). Its \"misconception\" is null.\n"
         "- The other 3 options are wrong answers. Use each of these codes exactly once:\n"
         f"{mistakes}\n"
@@ -166,8 +187,7 @@ def _to_question(raw_text: str, spec: tuple, difficulty: str) -> InternalQuestio
         raise ValueError("Exactly one option must be correct.")
 
     # Statement, source expression and explanation are ALL written by our code.
-    operator = _OPERATOR[law]
-    source = f"{base}^{m}*{base}^{n}" if law == "product" else f"{base}^{m}/{base}^{n}"
+    statement, source = manual.question_texts(law, base, m, n)
 
     identified = [(str(uuid4()), o.text.strip(), o.misconception) for o in data.options]
     random.SystemRandom().shuffle(identified)
@@ -178,7 +198,7 @@ def _to_question(raw_text: str, spec: tuple, difficulty: str) -> InternalQuestio
         id=str(uuid4()),
         topic_id=manual.TOPIC_ID,
         difficulty=difficulty,
-        statement=f"Simplify: {base}^{m} {operator} {base}^{n}",
+        statement=statement,
         options=options,
         correct_option_id=correct_id,
         explanation=manual.explain(source),
