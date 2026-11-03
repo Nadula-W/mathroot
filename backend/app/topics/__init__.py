@@ -1,7 +1,10 @@
 """Each teammate adds a topic module here without changing API routes."""
 from app.topics.development.binomial.generator import LLMBinomialTopic
+from app.topics.development.factorization.generator import FactorizationTopic
+
 TOPICS = {
       "binomial": LLMBinomialTopic(),
+      "factorization": FactorizationTopic(),
 }
 
 PLANNED_TOPICS = [
