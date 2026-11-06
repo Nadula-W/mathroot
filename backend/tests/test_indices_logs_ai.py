@@ -32,6 +32,24 @@ GOOD_POWER = {
     ],
 }
 
+GOOD_TOLOG = {
+    "options": [
+        {"text": "log_2 32 = 5", "misconception": None},
+        {"text": "log_32 2 = 5", "misconception": "LOG_BASE_AND_NUMBER_SWAPPED"},
+        {"text": "log_5 32 = 2", "misconception": "LOG_BASE_AND_RESULT_SWAPPED"},
+        {"text": "log_2 5 = 32", "misconception": "LOG_NUMBER_AND_RESULT_SWAPPED"},
+    ],
+}
+
+GOOD_TOINDEX = {
+    "options": [
+        {"text": "3^4 = 81", "misconception": None},
+        {"text": "4^3 = 81", "misconception": "INDEX_BASE_AND_EXPONENT_SWAPPED"},
+        {"text": "81^4 = 3", "misconception": "INDEX_BASE_AND_VALUE_SWAPPED"},
+        {"text": "3^81 = 4", "misconception": "INDEX_EXPONENT_AND_VALUE_SWAPPED"},
+    ],
+}
+
 
 def _copy(payload):
     return json.loads(json.dumps(payload))
@@ -47,6 +65,8 @@ SPECS = {
     "product": ("product", 3, 4, 2),
     "quotient": ("quotient", 6, 5, 2),
     "power": ("power", 2, 3, 2),
+    "tolog": ("tolog", 2, 5, 32),       # 2^5 = 32
+    "toindex": ("toindex", 3, 4, 81),   # log_3 81 = 4
 }
 
 def _fake_model(monkeypatch, payload, law):
@@ -66,6 +86,39 @@ def test_good_product_question_is_accepted(configured, monkeypatch):
 def test_good_quotient_question_is_accepted(configured, monkeypatch):
     _fake_model(monkeypatch, GOOD_QUOTIENT, "quotient")
     manual.validate_question(ai.generate_question("easy"))
+
+def test_good_conversion_questions_are_accepted(configured, monkeypatch):
+    _fake_model(monkeypatch, GOOD_TOLOG, "tolog")
+    question = ai.generate_question("easy")
+    manual.validate_question(question)
+    assert question.statement == "Write 2^5 = 32 in logarithmic form."
+    _fake_model(monkeypatch, GOOD_TOINDEX, "toindex")
+    question = ai.generate_question("easy")
+    manual.validate_question(question)
+    assert question.statement == "Write log_3 81 = 4 in index form."
+
+
+def test_model_cannot_slip_in_a_second_true_statement(configured, monkeypatch):
+    # 2^4 = 16 and 4^2 = 16, so "log_4 16 = 2" is ALSO true: not allowed as a wrong option
+    bad = {"options": [
+        {"text": "log_2 16 = 4", "misconception": None},
+        {"text": "log_16 2 = 4", "misconception": "LOG_BASE_AND_NUMBER_SWAPPED"},
+        {"text": "log_4 16 = 2", "misconception": "LOG_BASE_AND_RESULT_SWAPPED"},
+        {"text": "log_2 4 = 16", "misconception": "LOG_NUMBER_AND_RESULT_SWAPPED"},
+    ]}
+    monkeypatch.setattr(ai, "_call_ollama", lambda prompt, cfg: json.dumps(bad))
+    monkeypatch.setattr(ai, "_pick_spec", lambda: ("tolog", 2, 4, 16))
+    with pytest.raises(ValueError):
+        manual.validate_question(ai.generate_question("easy"))
+
+
+def test_conversion_with_swapped_codes_is_rejected(configured, monkeypatch):
+    bad = _copy(GOOD_TOINDEX)
+    bad["options"][1]["misconception"] = "INDEX_BASE_AND_VALUE_SWAPPED"
+    bad["options"][2]["misconception"] = "INDEX_BASE_AND_EXPONENT_SWAPPED"
+    _fake_model(monkeypatch, bad, "toindex")
+    with pytest.raises(ValueError):
+        manual.validate_question(ai.generate_question("easy"))
 
 
 def test_wrong_answer_key_is_rejected(configured, monkeypatch):

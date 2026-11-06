@@ -66,7 +66,10 @@ _BASES = [2, 3, 5, 6]
 def _pick_spec() -> tuple[str, int, int, int]:
     """OUR code chooses the law and the numbers. The model never does."""
     rng = random.SystemRandom()
-    law = rng.choice(["product", "quotient", "power"])
+    law = rng.choice(["product", "quotient", "power", "tolog", "toindex"])
+    if law in ("tolog", "toindex"):
+        base, e = rng.choice(manual.conversion_specs(law))  # only specs with ONE true option
+        return law, base, e, base ** e  # m = exponent, n = value
     if law == "power":
         base, m, n = rng.choice(manual.power_specs())  # only specs with 4 different values
         return law, base, m, n
@@ -83,14 +86,14 @@ def _pick_spec() -> tuple[str, int, int, int]:
 
 
 _EXAMPLES = {  # base 7 is never used in real questions, so it cannot be copied
-    "product": (
+        "product": (
         "Simplify: 7^5 × 7^3",
         '{"options": [{"text": "7^8", "misconception": null}, '
         '{"text": "7^15", "misconception": "MULTIPLIED_EXPONENTS"}, '
         '{"text": "49^8", "misconception": "MULTIPLIED_BASES"}, '
         '{"text": "7^2", "misconception": "SUBTRACTED_EXPONENTS"}]}',
     ),
-    "quotient": (
+        "quotient": (
         "Simplify: 7^7 ÷ 7^3",
         '{"options": [{"text": "7^4", "misconception": null}, '
         '{"text": "7^10", "misconception": "ADDED_EXPONENTS"}, '
@@ -104,7 +107,30 @@ _EXAMPLES = {  # base 7 is never used in real questions, so it cannot be copied
         '{"text": "3 × 7^2", "misconception": "EXPONENT_AS_MULTIPLIER"}, '
         '{"text": "7^8", "misconception": "POWER_ONLY_ON_EXPONENT"}]}',
     ),
+        "tolog": (
+        "Write 7^2 = 49 in logarithmic form.",
+        '{"options": [{"text": "log_7 49 = 2", "misconception": null}, '
+        '{"text": "log_49 7 = 2", "misconception": "LOG_BASE_AND_NUMBER_SWAPPED"}, '
+        '{"text": "log_2 49 = 7", "misconception": "LOG_BASE_AND_RESULT_SWAPPED"}, '
+        '{"text": "log_7 2 = 49", "misconception": "LOG_NUMBER_AND_RESULT_SWAPPED"}]}',
+    ),
+        "toindex": (
+        "Write log_7 49 = 2 in index form.",
+        '{"options": [{"text": "7^2 = 49", "misconception": null}, '
+        '{"text": "2^7 = 49", "misconception": "INDEX_BASE_AND_EXPONENT_SWAPPED"}, '
+        '{"text": "49^2 = 7", "misconception": "INDEX_BASE_AND_VALUE_SWAPPED"}, '
+        '{"text": "7^49 = 2", "misconception": "INDEX_EXPONENT_AND_VALUE_SWAPPED"}]}',
+    ),
 }
+
+_FORMAT_RULE = {
+    "product": 'is ONLY a power like 3^6 (or a product like 3 × 2^4 when the mistake says so)',
+    "quotient": 'is ONLY a power like 3^6 (or a power like 6^(5/2) when the mistake says so)',
+    "power": 'is ONLY a power like 3^6 (or a product like 3 × 2^4 when the mistake says so)',
+    "tolog": 'is ONLY an equation written exactly like log_3 81 = 4 (log_, the base, a space, the number, " = ", the answer)',
+    "toindex": 'is ONLY an equation written exactly like 3^4 = 81',
+}
+
 
 
 def _mistakes(law: str, base: int, m: int, n: int) -> tuple[str, str]:
@@ -116,6 +142,21 @@ def _mistakes(law: str, base: int, m: int, n: int) -> tuple[str, str]:
             f"  MULTIPLIED_BASES: the student adds the exponents ({m} + {n}) but also multiplies the bases "
             f"({base} × {base} = {base * base}), so the base becomes {base * base}\n"
             f"  SUBTRACTED_EXPONENTS: the student subtracts the exponents (bigger minus smaller) and keeps the base {base}",
+        )
+    if law == "tolog":  # m = exponent, n = value
+        return (
+            f"the base {base} stays the base of the log, the number is {n}, the answer is the exponent {m}",
+            f"  LOG_BASE_AND_NUMBER_SWAPPED: the student swaps the base {base} and the number {n}\n"
+            f"  LOG_BASE_AND_RESULT_SWAPPED: the student swaps the base {base} and the answer {m}\n"
+            f"  LOG_NUMBER_AND_RESULT_SWAPPED: the student swaps the number {n} and the answer {m}",
+        )
+    if law == "toindex":
+        return (
+            f"the base {base} of the log is the base of the power, the answer {m} is the exponent, "
+            f"and {n} is the value",
+            f"  INDEX_BASE_AND_EXPONENT_SWAPPED: the student swaps the base {base} and the exponent {m}\n"
+            f"  INDEX_BASE_AND_VALUE_SWAPPED: the student swaps the base {base} and the value {n}\n"
+            f"  INDEX_EXPONENT_AND_VALUE_SWAPPED: the student swaps the exponent {m} and the value {n}",
         )
 
     if law == "power":
@@ -146,7 +187,7 @@ def _build_prompt(law: str, base: int, m: int, n: int, difficulty: str) -> str:
         f"The question is already fixed: {statement}\n"
         "Write only the 4 answer options.\n"
         "Rules:\n"
-        "- Each option \"text\" is ONLY a power like 3^6 (or a product like 3 × 2^4 when the mistake says so). No words, no \"=\", no letters.\n"
+        f"- Each option \"text\" {_FORMAT_RULE[law]}. No other words.\n"
         f"- Exactly one option is correct ({correct_rule}). Its \"misconception\" is null.\n"
         "- The other 3 options are wrong answers. Use each of these codes exactly once:\n"
         f"{mistakes}\n"

@@ -74,7 +74,7 @@ def test_verify_answer():
     with pytest.raises(ValueError):
         verify_answer(question, "not-an-id")
 
-@pytest.mark.parametrize("law", ["product", "quotient", "power"])
+@pytest.mark.parametrize("law", ["product", "quotient", "power", "tolog", "toindex"])
 def test_each_law_generates_valid_questions(law):
     rng = random.Random(11)
     for _ in range(200):
@@ -157,5 +157,82 @@ def test_unreadable_multiple_is_rejected():
     question = generate_question("easy", random.Random(18), law="power")
     options = list(question.options)
     options[0] = replace(options[0], text="2 x x 2^3")
+    with pytest.raises(ValueError):
+        validate_question(replace(question, options=options))
+
+def test_conversion_laws_have_expected_codes():
+    tolog = generate_question("easy", random.Random(31), law="tolog")
+    assert {o.misconception for o in tolog.options} == {
+        None, "LOG_BASE_AND_NUMBER_SWAPPED", "LOG_BASE_AND_RESULT_SWAPPED",
+        "LOG_NUMBER_AND_RESULT_SWAPPED",
+    }
+    toindex = generate_question("easy", random.Random(32), law="toindex")
+    assert {o.misconception for o in toindex.options} == {
+        None, "INDEX_BASE_AND_EXPONENT_SWAPPED", "INDEX_BASE_AND_VALUE_SWAPPED",
+        "INDEX_EXPONENT_AND_VALUE_SWAPPED",
+    }
+
+
+def test_trap_spec_is_never_used():
+    from app.topics.development.indices_logs.manual import conversion_specs
+    # 2^4 = 16 and 4^2 = 16: the "swapped" statement would ALSO be true
+    assert (2, 4) not in conversion_specs("tolog")
+    assert (2, 4) not in conversion_specs("toindex")
+
+
+def _hand_built_tolog(base, e, texts):
+    """Make a tolog question from our generator, then overwrite it with chosen options."""
+    question = generate_question("easy", random.Random(33), law="tolog")
+    options = [replace(o, text=t, misconception=c) for o, (t, c) in zip(question.options, texts)]
+    value = base ** e
+    return replace(
+        question,
+        source_expression=f"{base}^{e}={value}",
+        correct_expression=texts[0][0],
+        options=options,
+        correct_option_id=options[0].id,
+    )
+
+
+def test_hand_built_conversion_question_passes():
+    question = _hand_built_tolog(2, 3, [
+        ("log_2 8 = 3", None),
+        ("log_8 2 = 3", "LOG_BASE_AND_NUMBER_SWAPPED"),
+        ("log_3 8 = 2", "LOG_BASE_AND_RESULT_SWAPPED"),
+        ("log_2 3 = 8", "LOG_NUMBER_AND_RESULT_SWAPPED"),
+    ])
+    validate_question(question)
+
+
+def test_true_wrong_statement_is_rejected():
+    # 4^2 = 16 is also true, so "log_4 16 = 2" is a second correct answer
+    question = _hand_built_tolog(2, 4, [
+        ("log_2 16 = 4", None),
+        ("log_16 2 = 4", "LOG_BASE_AND_NUMBER_SWAPPED"),
+        ("log_4 16 = 2", "LOG_BASE_AND_RESULT_SWAPPED"),
+        ("log_2 4 = 16", "LOG_NUMBER_AND_RESULT_SWAPPED"),
+    ])
+    with pytest.raises(ValueError):
+        validate_question(question)
+
+
+def test_false_question_statement_is_rejected():
+    question = generate_question("easy", random.Random(34), law="tolog")
+    with pytest.raises(ValueError):
+        validate_question(replace(question, source_expression="2^5=33"))
+
+
+def test_unreadable_statement_is_rejected():
+    question = generate_question("easy", random.Random(35), law="toindex")
+    options = list(question.options)
+    options[0] = replace(options[0], text="__import__('os') = 1")
+    with pytest.raises(ValueError):
+        validate_question(replace(question, options=options))
+
+
+def test_huge_conversion_numbers_do_not_hang():
+    question = generate_question("easy", random.Random(36), law="toindex")
+    options = list(question.options)
+    options[0] = replace(options[0], text="2^999999 = 4")
     with pytest.raises(ValueError):
         validate_question(replace(question, options=options))

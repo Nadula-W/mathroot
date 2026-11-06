@@ -99,11 +99,64 @@ def _build_power_law(rng) -> _Draft:
     statement, source = question_texts("power", base, m, n)
     return _Draft(statement, source, f"{base}^{m * n}", explain(source), options)
 
+@lru_cache(maxsize=2)
+def conversion_specs(law: str) -> list:
+    """All (base, exponent) whose 4 statements are different and only ONE is true."""
+    specs = []
+    for base in (2, 3, 5, 10):
+        for e in range(2, 6):
+            if base == e:
+                continue
+            v = base ** e
+            if law == "tolog":
+                options = [(base, v, e), (v, base, e), (e, v, base), (base, e, v)]
+                truth = [_power_equals(b, r, n) for b, n, r in options]
+            else:
+                options = [(base, e, v), (e, base, v), (v, e, base), (base, v, e)]
+                truth = [_power_equals(b, x, y) for b, x, y in options]
+            if truth == [True, False, False, False] and len(set(options)) == 4:
+                specs.append((base, e))
+    return specs
+
+
+def _build_tolog_law(rng) -> _Draft:
+    """Index form -> log form:  b^e = v   becomes   log_b v = e."""
+    base, e = rng.choice(conversion_specs("tolog"))
+    v = base ** e
+
+    options = [
+        (f"log_{base} {v} = {e}", (base, v, e), None),
+        (f"log_{v} {base} = {e}", (v, base, e), "LOG_BASE_AND_NUMBER_SWAPPED"),
+        (f"log_{e} {v} = {base}", (e, v, base), "LOG_BASE_AND_RESULT_SWAPPED"),
+        (f"log_{base} {e} = {v}", (base, e, v), "LOG_NUMBER_AND_RESULT_SWAPPED"),
+    ]
+    _self_check(options, (base, v, e))
+    statement, source = question_texts("tolog", base, e, v)
+    return _Draft(statement, source, options[0][0], explain(source), options)
+
+
+def _build_toindex_law(rng) -> _Draft:
+    """Log form -> index form:  log_b v = e   becomes   b^e = v."""
+    base, e = rng.choice(conversion_specs("toindex"))
+    v = base ** e
+
+    options = [
+        (f"{base}^{e} = {v}", (base, e, v), None),
+        (f"{e}^{base} = {v}", (e, base, v), "INDEX_BASE_AND_EXPONENT_SWAPPED"),
+        (f"{v}^{e} = {base}", (v, e, base), "INDEX_BASE_AND_VALUE_SWAPPED"),
+        (f"{base}^{v} = {e}", (base, v, e), "INDEX_EXPONENT_AND_VALUE_SWAPPED"),
+    ]
+    _self_check(options, (base, e, v))
+    statement, source = question_texts("toindex", base, e, v)
+    return _Draft(statement, source, options[0][0], explain(source), options)
+
 
 _LAWS = {
     "product": _build_product_law,
     "quotient": _build_quotient_law,
     "power": _build_power_law,
+    "tolog": _build_tolog_law,
+    "toindex": _build_toindex_law,
 }
 
 
@@ -159,6 +212,10 @@ def question_texts(law: str, base: int, m: int, n: int) -> tuple[str, str]:
         return f"Simplify: {base}^{m} ÷ {base}^{n}", f"{base}^{m}/{base}^{n}"
     if law == "power":
         return f"Simplify: ({base}^{m})^{n}", f"({base}^{m})^{n}"
+    if law == "tolog":  # m = exponent, n = value
+        return f"Write {base}^{m} = {n} in logarithmic form.", f"{base}^{m}={n}"
+    if law == "toindex":  # m = exponent, n = value
+        return f"Write log_{base} {n} = {m} in index form.", f"log_{base} {n}={m}"
     raise ValueError(f"Unknown law: {law}")
 
 
@@ -171,8 +228,16 @@ def explain(source_expression: str) -> str:
     if law == "quotient":
         return (f"Same base, so SUBTRACT the exponents: {m} - {n} = {m - n}. "
                 f"The answer is {base}^{m - n}.")
-    return (f"A power of a power, so MULTIPLY the exponents: {m} × {n} = {m * n}. "
-            f"The answer is {base}^{m * n}.")
+    if law == "power":
+        return (f"A power of a power, so MULTIPLY the exponents: {m} × {n} = {m * n}. "
+                f"The answer is {base}^{m * n}.")
+    if law == "tolog":
+        return (f"{base}^{m} = {n} means: the base {base} stays the base of the log, "
+                f"the number is {n}, and the exponent {m} is the answer. So log_{base} {n} = {m}.")
+    return (f"log_{base} {n} = {m} means: the base {base} stays the base, "
+            f"the answer {m} becomes the exponent, and the number {n} is the result. "
+            f"So {base}^{m} = {n}.")
+
 
 
 # ---------- Part 3: independent validation ----------
@@ -187,12 +252,21 @@ _MULTIPLE = re.compile(r"(\d+)\s*×\s*(\d+)\^(\d+)")
 _PRODUCT = re.compile(r"(\d+)\^(\d+)\*(\d+)\^(\d+)")
 _QUOTIENT = re.compile(r"(\d+)\^(\d+)/(\d+)\^(\d+)")
 _POWER_OF_POWER = re.compile(r"\((\d+)\^(\d+)\)\^(\d+)")
+_TOLOG_SOURCE = re.compile(r"(\d{1,6})\^(\d{1,6})=(\d{1,6})")        # 2^5=32
+_TOINDEX_SOURCE = re.compile(r"log_(\d{1,6}) (\d{1,6})=(\d{1,6})")    # log_3 81=4
+_LOG_STATEMENT = re.compile(r"log_(\d{1,6})\s+(\d{1,6})\s*=\s*(\d{1,6})")
+_INDEX_STATEMENT = re.compile(r"(\d{1,6})\^(\d{1,6})\s*=\s*(\d{1,6})")
 
 _CODES_BY_LAW = {
     "product": {"MULTIPLIED_EXPONENTS", "MULTIPLIED_BASES", "SUBTRACTED_EXPONENTS"},
     "quotient": {"ADDED_EXPONENTS", "DIVIDED_EXPONENTS", "DIVIDED_BASES"},
     "power": {"ADDED_EXPONENTS_POWER", "EXPONENT_AS_MULTIPLIER", "POWER_ONLY_ON_EXPONENT"},
+    "tolog": {"LOG_BASE_AND_NUMBER_SWAPPED", "LOG_BASE_AND_RESULT_SWAPPED",
+              "LOG_NUMBER_AND_RESULT_SWAPPED"},
+    "toindex": {"INDEX_BASE_AND_EXPONENT_SWAPPED", "INDEX_BASE_AND_VALUE_SWAPPED",
+                "INDEX_EXPONENT_AND_VALUE_SWAPPED"},
 }
+_STATEMENT_LAWS = {"tolog", "toindex"}  # options are equations, not numbers
 
 
 def _checked_power(base: int, numerator: int, denominator: int = 1):
@@ -206,6 +280,44 @@ def _checked_power(base: int, numerator: int, denominator: int = 1):
     if not 1 <= denominator <= MAX_ROOT:
         raise ValueError(f"Denominator {denominator} is outside the allowed range.")
     return Integer(base) ** Rational(numerator, denominator)
+
+
+def _power_equals(base: int, exponent: int, value: int) -> bool:
+    """Is base^exponent == value? Stops early, so huge exponents cannot hang us."""
+    if base == 1:
+        return value == 1
+    result = 1
+    for _ in range(exponent):
+        result *= base
+        if result > value:
+            return False
+    return result == value
+
+
+def _statement_value(law: str, text: str) -> tuple:
+    """Read 'log_2 32 = 5' (tolog) or '3^4 = 81' (toindex) into three numbers."""
+    pattern = _LOG_STATEMENT if law == "tolog" else _INDEX_STATEMENT
+    match = pattern.fullmatch(text.strip())
+    if not match:
+        raise ValueError(f"Unreadable statement: {text!r}")
+    first, second, third = (int(g) for g in match.groups())
+    if first < (2 if law == "tolog" else 1):
+        raise ValueError("The base is outside the allowed range.")
+    return first, second, third
+
+
+def _statement_is_true(law: str, value: tuple) -> bool:
+    first, second, third = value
+    if law == "tolog":  # log_first second = third  means  first^third == second
+        return _power_equals(first, third, second)
+    return _power_equals(first, second, third)  # first^second = third
+
+
+def _option_value(law: str, text: str):
+    """One reader for every law: numbers for the first three, three-number tuples for the rest."""
+    if law in _STATEMENT_LAWS:
+        return _statement_value(law, text)
+    return _power_value(text)
 
 
 def _power_value(text: str):
@@ -242,6 +354,18 @@ def _parse_source(source_expression: str):
         if m > MAX_EXPONENT or n > MAX_EXPONENT:
             raise ValueError("Exponent is outside the allowed range.")
         return "power", base, m, n
+    match = _TOLOG_SOURCE.fullmatch(text)
+    if match:
+        base, exponent, value = (int(g) for g in match.groups())
+        if base < 2:
+            raise ValueError("The base is outside the allowed range.")
+        return "tolog", base, exponent, value
+    match = _TOINDEX_SOURCE.fullmatch(text)
+    if match:
+        base, value, exponent = (int(g) for g in match.groups())
+        if base < 2:
+            raise ValueError("The base is outside the allowed range.")
+        return "toindex", base, exponent, value
     raise ValueError("Unknown question pattern.")
 
 
@@ -252,7 +376,12 @@ def _expected_value(source_expression: str):
         return _checked_power(base, m) * _checked_power(base, n)
     if law == "quotient":
         return _checked_power(base, m) / _checked_power(base, n)
-    return _checked_power(base, m) ** n  # (base^m)^n
+    if law == "power":
+        return _checked_power(base, m) ** n  # (base^m)^n
+    # tolog / toindex: m = exponent, n = value. The statement in the question must be true.
+    if not _power_equals(base, m, n):
+        raise ValueError("The statement in the question is false.")
+    return (base, n, m) if law == "tolog" else (base, m, n)
 
 
 def _evidence_value(code: str, base: int, m: int, n: int):
@@ -275,6 +404,19 @@ def _evidence_value(code: str, base: int, m: int, n: int):
         return Integer(n) * _checked_power(base, m)
     if code == "POWER_ONLY_ON_EXPONENT":
         return _checked_power(base, m ** n)
+    # conversion laws: base, m = exponent, n = value
+    if code == "LOG_BASE_AND_NUMBER_SWAPPED":
+        return (n, base, m)
+    if code == "LOG_BASE_AND_RESULT_SWAPPED":
+        return (m, n, base)
+    if code == "LOG_NUMBER_AND_RESULT_SWAPPED":
+        return (base, m, n)
+    if code == "INDEX_BASE_AND_EXPONENT_SWAPPED":
+        return (m, base, n)
+    if code == "INDEX_BASE_AND_VALUE_SWAPPED":
+        return (n, m, base)
+    if code == "INDEX_EXPONENT_AND_VALUE_SWAPPED":
+        return (base, n, m)
     raise ValueError(f"Unknown misconception code: {code}")
 
 
@@ -291,12 +433,12 @@ def validate_question(question: InternalQuestion) -> None:
 
     law, base, m, n = _parse_source(question.source_expression)
     expected = _expected_value(question.source_expression)
-    if _power_value(question.correct_expression) != expected:
+    if _option_value(law, question.correct_expression) != expected:
         raise ValueError("correct_expression does not match the source expression.")
 
     values = []
     for option in options:
-        value = _power_value(option.text)
+        value = _option_value(law, option.text)
         is_key = option.id == question.correct_option_id
         if is_key and option.misconception is not None:
             raise ValueError("The correct option must not have a misconception code.")
@@ -304,6 +446,8 @@ def validate_question(question: InternalQuestion) -> None:
             raise ValueError("Every wrong option needs a misconception code.")
         if is_key != (value == expected):
             raise ValueError("Key and distractor values do not match the true answer.")
+        if law in _STATEMENT_LAWS and _statement_is_true(law, value) != is_key:
+            raise ValueError("The key must be a true statement and every wrong option a false one.")
         if not is_key:
             code = option.misconception
             if code not in _CODES_BY_LAW[law]:
@@ -336,6 +480,12 @@ MISCONCEPTIONS = {
     "ADDED_EXPONENTS_POWER": "The exponents were added instead of multiplied in a power of a power.",
     "EXPONENT_AS_MULTIPLIER": "The outer exponent was treated as a multiplier instead of a power.",
     "POWER_ONLY_ON_EXPONENT": "Only the exponent was raised to the outer power; the base was left out.",
+        "LOG_BASE_AND_NUMBER_SWAPPED": "The base and the number were swapped when writing the logarithm.",
+    "LOG_BASE_AND_RESULT_SWAPPED": "The exponent was used as the base of the logarithm.",
+    "LOG_NUMBER_AND_RESULT_SWAPPED": "The number and the answer of the logarithm were swapped.",
+    "INDEX_BASE_AND_EXPONENT_SWAPPED": "The base and the exponent were swapped when writing the index form.",
+    "INDEX_BASE_AND_VALUE_SWAPPED": "The number inside the logarithm was used as the base of the index form.",
+    "INDEX_EXPONENT_AND_VALUE_SWAPPED": "The number inside the logarithm was used as the exponent.",
 }
 
 _FEEDBACK = {
@@ -348,6 +498,12 @@ _FEEDBACK = {
     "ADDED_EXPONENTS_POWER": "You may have added the exponents. For a power of a power, you MULTIPLY the exponents.",
     "EXPONENT_AS_MULTIPLIER": "You may have used the outer exponent as 'times'. An exponent means repeated multiplication, so (a^m)^n means a^m multiplied by itself n times.",
     "POWER_ONLY_ON_EXPONENT": "You may have raised only the exponent to the outer power. The whole base power is raised, so the exponents are multiplied.",
+    "LOG_BASE_AND_NUMBER_SWAPPED": "You may have swapped the base and the number. In log_b n, the base b is the same base as in the index form.",
+    "LOG_BASE_AND_RESULT_SWAPPED": "You may have used the exponent as the base of the log. The base of the log is the base of the power.",
+    "LOG_NUMBER_AND_RESULT_SWAPPED": "You may have swapped the number and the answer. The logarithm is the exponent, and the number is the value of the power.",
+    "INDEX_BASE_AND_EXPONENT_SWAPPED": "You may have swapped the base and the exponent. The base of the log becomes the base of the power.",
+    "INDEX_BASE_AND_VALUE_SWAPPED": "You may have used the number inside the log as the base. The number inside the log is the value of the power.",
+    "INDEX_EXPONENT_AND_VALUE_SWAPPED": "You may have used the number inside the log as the exponent. The answer of the log is the exponent.",
 }
 
 _RECOMMENDATIONS = {
@@ -360,6 +516,12 @@ _RECOMMENDATIONS = {
     "ADDED_EXPONENTS_POWER": "Write (2^3)^2 as 2^3 x 2^3 = 2^6 to show the exponents are multiplied, then contrast with the product law.",
     "EXPONENT_AS_MULTIPLIER": "Show that (2^3)^2 means 2^3 x 2^3, not 2 x 2^3. Practise writing the repeated multiplication.",
     "POWER_ONLY_ON_EXPONENT": "Expand (2^3)^2 fully as (2x2x2) x (2x2x2) and count the factors, to show the base is kept and the exponents are multiplied.",
+    "LOG_BASE_AND_NUMBER_SWAPPED": "Use a colour code on 2^5 = 32: base, exponent, value. Then rewrite as log_2 32 = 5 keeping the colours: base stays base.",
+    "LOG_BASE_AND_RESULT_SWAPPED": "Stress that the answer of a log is the exponent. Practise 'the log asks: what power of the base gives the number?'",
+    "LOG_NUMBER_AND_RESULT_SWAPPED": "Read log_2 32 = 5 aloud as '2 to the power 5 gives 32', so the 32 is the value and the 5 is the exponent.",
+    "INDEX_BASE_AND_EXPONENT_SWAPPED": "Use a colour code on log_3 81 = 4: the small base number stays the base of the power. Rewrite as 3^4 = 81.",
+    "INDEX_BASE_AND_VALUE_SWAPPED": "Stress that the number inside the log is the value of the power (the big number), never the base.",
+    "INDEX_EXPONENT_AND_VALUE_SWAPPED": "Stress that the answer of the log is the exponent. Read log_3 81 = 4 as '3 to the power 4 gives 81'.",
 }
 
 
