@@ -1,6 +1,6 @@
 ﻿# Nimsara — Equations
 
-Implemented and registered as `equations` in `app/topics/__init__.py`. Other members' implementations are unchanged.
+Implemented as `equations`; application registration and readiness are pending Nadula's central integration review. The shared registry is restored to its prior state, with Equations unregistered and `ready=False`.
 
 ## Supported mathematics
 
@@ -24,6 +24,7 @@ MATHROOT_EQUATIONS_PROVIDER=ollama
 MATHROOT_EQUATIONS_MODEL=
 MATHROOT_EQUATIONS_BASE_URL=http://127.0.0.1:11434
 MATHROOT_EQUATIONS_TIMEOUT_SECONDS=4
+MATHROOT_EQUATIONS_API_KEY=
 ```
 
 To enable AI, select `MODE=auto` and set `MODEL` to a model available on your Ollama server. `API_KEY` is optional for an authenticated compatible endpoint; never commit credentials or put them in frontend settings. Other provider names are rejected and generation falls back to manual. No request occurs on import.
@@ -45,10 +46,17 @@ From the repository root:
 ```powershell
 Push-Location backend
 ..\.venv\Scripts\python.exe -m pytest tests/test_equations.py -q -p no:cacheprovider
-..\.venv\Scripts\python.exe -m pytest tests -q -p no:cacheprovider
 Pop-Location
 ```
 
-Tests cover at least 100 generated variants per difficulty, independent substitution of every option, tampered questions, provider success/timeouts/bad JSON/schema/invalid mathematics/oversized responses, missing configuration, incorrect AI grades, bilingual math preservation, translation rejection and full assessment submission/reporting. HTTP is mocked; no live model or credentials are required. Full application fixtures also require the shared backend's Supabase dependency, installed in the local test environment.
+With the virtual environment activated, the requested command from `backend` is `python -m pytest -q tests/test_equations.py`.
 
-Two pre-existing tests assume Binomial is the only ready topic (in `test_binomial.py` and `test_bilingual_assessments.py`). Those assertions are obsolete after registering Equations. They are left untouched to preserve other members' work; the equations assessment tests verify the new registration and behavior.
+Tests cover at least 100 generated variants per difficulty, independent substitution of every option, exact misconception values, identities/no-solution rejection, tampered questions, provider success/timeouts/bad JSON/schema/invalid mathematics/oversized responses, missing configuration, incorrect AI grades, rule-based feedback fallback, bilingual math preservation, translation rejection and assessment submission/reporting. Assessment tests temporarily register Equations using pytest's monkeypatch; production registration remains pending. Database persistence is verified with the shared in-memory Supabase double, not a live database. HTTP provider tests are mocked; no live model or credentials are required. Application fixtures require the shared backend's Supabase and python-dotenv dependencies in the local test environment.
+
+Shared-suite expectations, application routes, frontend and Supabase integration belong to Nadula and are outside this topic cleanup.
+
+Final topic check (2026-11-06): `python -m pytest -q tests/test_equations.py` from `backend`, using the repository-local virtual environment: **59 passed, 1 warning in 0.71s**. The warning is a dependency deprecation from Starlette's HTTPX TestClient. No shared tests were changed or run for this topic cleanup.
+
+### Live provider limitation
+
+The local Ollama discovery request (`GET http://127.0.0.1:11434/api/tags`) could not connect during this cleanup, and no Equations model was configured. A successful live generation/feedback request could not be verified. Mocked adapter tests establish validation and fallback behavior, not that a real model is installed or configured. To perform a live check, start Ollama, set `MATHROOT_EQUATIONS_MODE=auto` and `MATHROOT_EQUATIONS_MODEL` to an installed model, then call `ai.generate_question` directly and inspect `verification_method` from the topic verifier; a successful fallback alone is not evidence of live AI success.

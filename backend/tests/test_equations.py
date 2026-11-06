@@ -22,8 +22,20 @@ def test_generated_variants(difficulty):
             c = 0
         else:
             a, b, c, d = numbers
+        constant = a * b if difficulty == 'hard' else b
+        assert a != c
+        solution = Fraction(d - constant, a - c)
+        assert Fraction(question.correct_expression) == solution
+        expected = {
+            None: solution,
+            'INVERSE_SIGN': Fraction(d + constant, a - c),
+            'MISSING_DIVISION': Fraction(d - constant),
+            'NEGATED_SOLUTION': -solution,
+        }
+        assert len({option.text for option in question.options}) == 4
         for option in question.options:
             x = Fraction(option.text.removeprefix('x = '))
+            assert x == expected[option.misconception]
             left = a * (x + b) if difficulty == 'hard' else a * x + b
             assert (left == c * x + d) == (option.id == question.correct_option_id)
             assert manual.verify_answer(question, option.id) == (left == c * x + d)
@@ -144,6 +156,45 @@ def test_missing_model_skips_network(monkeypatch):
     manual.validate_question(generator.generate_question('easy'))
 
 
+@pytest.mark.parametrize('failure', ['timeout', 'json', 'schema', 'http', 'missing_model'])
+@pytest.mark.parametrize('difficulty', ['easy', 'medium', 'hard'])
+def test_feedback_provider_failure_preserves_rules(ollama, monkeypatch, failure, difficulty):
+    from app.topics.development.equations.verifier import verify_answer
+    monkeypatch.setenv('MATHROOT_ANSWER_VERIFIER', 'auto')
+    if failure == 'timeout':
+        ollama['timeout'] = True
+    elif failure == 'json':
+        ollama['raw'] = b'not json'
+    elif failure == 'schema':
+        ollama['content'] = {'unexpected': True}
+    elif failure == 'http':
+        ollama['status'] = 503
+    else:
+        monkeypatch.delenv('MATHROOT_EQUATIONS_MODEL', raising=False)
+    question = manual.generate_question(difficulty)
+    topic = generator.EquationsTopic()
+    for option in question.options:
+        result = verify_answer(question, option.id)
+        assert result['correct'] == (option.id == question.correct_option_id)
+        assert result['verification_method'] == 'manual_fallback'
+        assert result['suspected_misconception'] == option.misconception
+        assert result['feedback'] == manual.feedback(question, option.misconception)
+        for field in ('feedback', 'corrective_guidance', 'teaching_recommendation'):
+            assert topic.presentation_text(field, result[field], question)
+
+
+@pytest.mark.parametrize('source,difficulty', [
+    ('2*x + (1) = 1', 'easy'),  # Zero solution collapses diagnostic options.
+    ('2*x + (1) = 2*x + (1)', 'medium'),  # Identity.
+    ('2*x + (1) = 2*x + (3)', 'medium'),  # No solution.
+    ('2*(x + (1)) = 2*x + (2)', 'hard'),
+    ('2*(x + (1)) = 2*x + (3)', 'hard'),
+])
+def test_reject_degenerate_equations(source, difficulty):
+    with pytest.raises(ValueError):
+        manual.from_source(difficulty, source)
+
+
 @pytest.mark.parametrize('value', ['nan', 'inf', '-1', '1000', 'bad'])
 def test_timeout_is_bounded(monkeypatch, value):
     monkeypatch.setenv('MATHROOT_EQUATIONS_TIMEOUT_SECONDS', value)
@@ -209,6 +260,9 @@ def test_translation_adapter_and_guards(ollama):
 def test_equations_assessment_flow(client, monkeypatch, difficulty):
     from copy import deepcopy
     from test_assessments import teacher, enroll
+    from app.topics import TOPICS
+    # Registration belongs to central integration; install only for this test.
+    monkeypatch.setitem(TOPICS, 'equations', generator.EquationsTopic())
     monkeypatch.setenv('MATHROOT_EQUATIONS_MODE', 'manual')
     teacher(client)
     created = client.post('/api/tests', json={
