@@ -1,5 +1,6 @@
 import random
 from dataclasses import replace
+
 import pytest
 
 from app.topics.development.indices_logs.manual import (
@@ -74,7 +75,12 @@ def test_verify_answer():
     with pytest.raises(ValueError):
         verify_answer(question, "not-an-id")
 
-@pytest.mark.parametrize("law", ["product", "quotient", "power", "tolog", "toindex"])
+
+ALL_LAWS = ["product", "quotient", "power", "tolog", "toindex",
+            "logvalue", "logsum", "logdiff", "logpower"]
+
+
+@pytest.mark.parametrize("law", ALL_LAWS)
 def test_each_law_generates_valid_questions(law):
     rng = random.Random(11)
     for _ in range(200):
@@ -98,7 +104,8 @@ def test_zero_denominator_is_rejected():
 def test_unknown_law_is_rejected():
     with pytest.raises(ValueError):
         generate_question("easy", random.Random(14), law="cubic")
-        
+
+
 def test_swapped_codes_are_rejected():
     question = generate_question("easy", random.Random(21), law="product")
     wrong = [o for o in question.options if o.id != question.correct_option_id]
@@ -111,6 +118,7 @@ def test_swapped_codes_are_rejected():
     ]
     with pytest.raises(ValueError):
         validate_question(replace(question, options=options))
+
 
 def test_power_has_expected_codes():
     question = generate_question("easy", random.Random(15), law="power")
@@ -159,6 +167,7 @@ def test_unreadable_multiple_is_rejected():
     options[0] = replace(options[0], text="2 x x 2^3")
     with pytest.raises(ValueError):
         validate_question(replace(question, options=options))
+
 
 def test_conversion_laws_have_expected_codes():
     tolog = generate_question("easy", random.Random(31), law="tolog")
@@ -234,5 +243,61 @@ def test_huge_conversion_numbers_do_not_hang():
     question = generate_question("easy", random.Random(36), law="toindex")
     options = list(question.options)
     options[0] = replace(options[0], text="2^999999 = 4")
+    with pytest.raises(ValueError):
+        validate_question(replace(question, options=options))
+
+
+def test_log_laws_have_expected_codes():
+    expected = {
+        "logvalue": {"DIVIDED_VALUE_BY_BASE", "SUBTRACTED_BASE_FROM_VALUE",
+                     "COUNTED_MULTIPLICATION_SIGNS"},
+        "logsum": {"LOG_OF_SUM", "MULTIPLIED_LOG_VALUES", "LOGS_IGNORED_NUMBERS_ADDED"},
+        "logdiff": {"LOG_OF_DIFFERENCE", "DIVIDED_LOG_VALUES", "LOGS_IGNORED_NUMBERS_DIVIDED"},
+        "logpower": {"LOG_RAISED_TO_POWER", "POWER_ADDED_TO_LOG", "POWER_IGNORED"},
+    }
+    for law, codes in expected.items():
+        question = generate_question("easy", random.Random(40), law=law)
+        assert {o.misconception for o in question.options} == codes | {None}
+
+
+def test_every_log_spec_has_four_different_values():
+    from app.topics.development.indices_logs.manual import log_specs
+    for law in ["logvalue", "logsum", "logdiff", "logpower"]:
+        assert len(log_specs(law)) >= 5
+
+
+def test_log_option_that_equals_the_answer_is_rejected():
+    # "log_2 8" is just another way to write 3, so it must not be a wrong option
+    question = generate_question("easy", random.Random(41), law="logsum")
+    wrong = next(o for o in question.options if o.misconception == "LOG_OF_SUM")
+    options = [replace(o, text="log_2 8") if o.id == wrong.id else o for o in question.options]
+    with pytest.raises(ValueError):
+        validate_question(replace(question, options=options))
+
+
+def test_logs_that_are_not_whole_powers_are_rejected_in_the_question():
+    question = generate_question("easy", random.Random(42), law="logvalue")
+    with pytest.raises(ValueError):
+        validate_question(replace(question, source_expression="log_2 12"))
+
+
+def test_decimal_and_log_text_are_read_safely():
+    question = generate_question("easy", random.Random(43), law="logdiff")
+    options = list(question.options)
+    options[0] = replace(options[0], text="2.5.5")
+    with pytest.raises(ValueError):
+        validate_question(replace(question, options=options))
+
+
+def test_log_codes_must_match_their_values():
+    question = generate_question("easy", random.Random(44), law="logpower")
+    wrong = [o for o in question.options if o.id != question.correct_option_id]
+    a, b = wrong[0], wrong[1]
+    options = [
+        replace(o, misconception=b.misconception) if o.id == a.id
+        else replace(o, misconception=a.misconception) if o.id == b.id
+        else o
+        for o in question.options
+    ]
     with pytest.raises(ValueError):
         validate_question(replace(question, options=options))

@@ -99,6 +99,7 @@ def _build_power_law(rng) -> _Draft:
     statement, source = question_texts("power", base, m, n)
     return _Draft(statement, source, f"{base}^{m * n}", explain(source), options)
 
+
 @lru_cache(maxsize=2)
 def conversion_specs(law: str) -> list:
     """All (base, exponent) whose 4 statements are different and only ONE is true."""
@@ -151,12 +152,109 @@ def _build_toindex_law(rng) -> _Draft:
     return _Draft(statement, source, options[0][0], explain(source), options)
 
 
+@lru_cache(maxsize=4)
+def log_specs(law: str) -> list:
+    """All (base, m, n) for a log law whose 4 options really are different.
+
+    logvalue: (base, exponent, number)   logsum / logdiff: (base, i, j) for log_b b^i, log_b b^j
+    logpower: (base, k, r) for log_b ((b^k)^r)
+    """
+    if law == "logvalue":
+        candidates = [(b, e, b ** e) for b in (2, 3, 5, 10) for e in range(2, 6)]
+    elif law == "logsum":
+        candidates = [(b, i, j) for b in (2, 3, 5) for i in range(1, 5) for j in range(i + 1, 5)]
+    elif law == "logdiff":
+        candidates = [(b, i, j) for b in (2, 3, 5) for i in range(2, 6) for j in range(1, i)
+                      if Rational(i, j).q in (2, 4, 5)]  # i/j must be a short decimal
+    else:
+        candidates = [(b, k, r) for b in (2, 3, 5) for k in range(2, 5) for r in range(2, 5)]
+
+    specs = []
+    for base, m, n in candidates:
+        _, source = question_texts(law, base, m, n)
+        values = [_expected_value(source)]
+        values += [_evidence_value(code, base, m, n) for code in sorted(_CODES_BY_LAW[law])]
+        # "log of a sum / difference" must stay a real log such as log_2 12, not a whole number
+        if law in ("logsum", "logdiff") and not any(isinstance(v, tuple) for v in values):
+            continue
+        if len(set(values)) == 4:
+            specs.append((base, m, n))
+    return specs
+
+
+def _build_logvalue_law(rng) -> _Draft:
+    """log_b N = ?   where N = b^e."""
+    base, e, n = rng.choice(log_specs("logvalue"))
+
+    options = [
+        (str(e),           Integer(e),           None),
+        (str(n // base),   Integer(n // base),   "DIVIDED_VALUE_BY_BASE"),
+        (str(n - base),    Integer(n - base),    "SUBTRACTED_BASE_FROM_VALUE"),
+        (str(e - 1),       Integer(e - 1),       "COUNTED_MULTIPLICATION_SIGNS"),
+    ]
+    _self_check(options, Integer(e))
+    statement, source = question_texts("logvalue", base, e, n)
+    return _Draft(statement, source, str(e), explain(source), options)
+
+
+def _build_logsum_law(rng) -> _Draft:
+    """log_b M + log_b N   where M = b^i and N = b^j."""
+    base, i, j = rng.choice(log_specs("logsum"))
+    big_m, big_n = base ** i, base ** j
+
+    options = [
+        (str(i + j),                       Integer(i + j),                   None),
+        (f"log_{base} {big_m + big_n}",    _log_value(base, big_m + big_n),  "LOG_OF_SUM"),
+        (str(i * j),                       Integer(i * j),                   "MULTIPLIED_LOG_VALUES"),
+        (str(big_m + big_n),               Integer(big_m + big_n),           "LOGS_IGNORED_NUMBERS_ADDED"),
+    ]
+    _self_check(options, Integer(i + j))
+    statement, source = question_texts("logsum", base, i, j)
+    return _Draft(statement, source, str(i + j), explain(source), options)
+
+
+def _build_logdiff_law(rng) -> _Draft:
+    """log_b M - log_b N   where M = b^i and N = b^j (i > j)."""
+    base, i, j = rng.choice(log_specs("logdiff"))
+    big_m, big_n = base ** i, base ** j
+    ratio = Rational(i, j)
+
+    options = [
+        (str(i - j),                        Integer(i - j),                    None),
+        (f"log_{base} {big_m - big_n}",     _log_value(base, big_m - big_n),   "LOG_OF_DIFFERENCE"),
+        (f"{float(ratio):g}",               ratio,                             "DIVIDED_LOG_VALUES"),
+        (str(big_m // big_n),               Integer(big_m // big_n),           "LOGS_IGNORED_NUMBERS_DIVIDED"),
+    ]
+    _self_check(options, Integer(i - j))
+    statement, source = question_texts("logdiff", base, i, j)
+    return _Draft(statement, source, str(i - j), explain(source), options)
+
+
+def _build_logpower_law(rng) -> _Draft:
+    """log_b ((b^k)^r) = r * k   (the power law)."""
+    base, k, r = rng.choice(log_specs("logpower"))
+
+    options = [
+        (str(k * r),   Integer(k * r),   None),
+        (str(k ** r),  Integer(k ** r),  "LOG_RAISED_TO_POWER"),
+        (str(k + r),   Integer(k + r),   "POWER_ADDED_TO_LOG"),
+        (str(k),       Integer(k),       "POWER_IGNORED"),
+    ]
+    _self_check(options, Integer(k * r))
+    statement, source = question_texts("logpower", base, k, r)
+    return _Draft(statement, source, str(k * r), explain(source), options)
+
+
 _LAWS = {
     "product": _build_product_law,
     "quotient": _build_quotient_law,
     "power": _build_power_law,
     "tolog": _build_tolog_law,
     "toindex": _build_toindex_law,
+    "logvalue": _build_logvalue_law,
+    "logsum": _build_logsum_law,
+    "logdiff": _build_logdiff_law,
+    "logpower": _build_logpower_law,
 }
 
 
@@ -216,6 +314,19 @@ def question_texts(law: str, base: int, m: int, n: int) -> tuple[str, str]:
         return f"Write {base}^{m} = {n} in logarithmic form.", f"{base}^{m}={n}"
     if law == "toindex":  # m = exponent, n = value
         return f"Write log_{base} {n} = {m} in index form.", f"log_{base} {n}={m}"
+    if law == "logvalue":  # m = exponent, n = number
+        return f"Find the value of log_{base} {n}.", f"log_{base} {n}"
+    if law == "logsum":  # m = i, n = j  (numbers are base^i and base^j)
+        big_m, big_n = base ** m, base ** n
+        return (f"Find the value of log_{base} {big_m} + log_{base} {big_n}.",
+                f"log_{base} {big_m}+log_{base} {big_n}")
+    if law == "logdiff":
+        big_m, big_n = base ** m, base ** n
+        return (f"Find the value of log_{base} {big_m} - log_{base} {big_n}.",
+                f"log_{base} {big_m}-log_{base} {big_n}")
+    if law == "logpower":  # m = k, n = r  ->  log_base ((base^k)^r)
+        inner = base ** m
+        return f"Find the value of log_{base} ({inner}^{n}).", f"log_{base} ({inner}^{n})"
     raise ValueError(f"Unknown law: {law}")
 
 
@@ -234,10 +345,21 @@ def explain(source_expression: str) -> str:
     if law == "tolog":
         return (f"{base}^{m} = {n} means: the base {base} stays the base of the log, "
                 f"the number is {n}, and the exponent {m} is the answer. So log_{base} {n} = {m}.")
+    if law == "logvalue":
+        return (f"log_{base} {n} asks: which power of {base} gives {n}? "
+                f"{base}^{m} = {n}, so the answer is {m}.")
+    if law == "logsum":
+        return (f"Find each log first: log_{base} {base ** m} = {m} and log_{base} {base ** n} = {n}. "
+                f"Then add: {m} + {n} = {m + n}.")
+    if law == "logdiff":
+        return (f"Find each log first: log_{base} {base ** m} = {m} and log_{base} {base ** n} = {n}. "
+                f"Then subtract: {m} - {n} = {m - n}.")
+    if law == "logpower":
+        return (f"Power law: log_{base} ({base ** m}^{n}) = {n} x log_{base} {base ** m} "
+                f"= {n} x {m} = {m * n}.")
     return (f"log_{base} {n} = {m} means: the base {base} stays the base, "
             f"the answer {m} becomes the exponent, and the number {n} is the result. "
             f"So {base}^{m} = {n}.")
-
 
 
 # ---------- Part 3: independent validation ----------
@@ -256,6 +378,12 @@ _TOLOG_SOURCE = re.compile(r"(\d{1,6})\^(\d{1,6})=(\d{1,6})")        # 2^5=32
 _TOINDEX_SOURCE = re.compile(r"log_(\d{1,6}) (\d{1,6})=(\d{1,6})")    # log_3 81=4
 _LOG_STATEMENT = re.compile(r"log_(\d{1,6})\s+(\d{1,6})\s*=\s*(\d{1,6})")
 _INDEX_STATEMENT = re.compile(r"(\d{1,6})\^(\d{1,6})\s*=\s*(\d{1,6})")
+_LOGVALUE_SOURCE = re.compile(r"log_(\d{1,6}) (\d{1,6})")                          # log_2 32
+_LOGSUM_SOURCE = re.compile(r"log_(\d{1,6}) (\d{1,6})\+log_(\d{1,6}) (\d{1,6})")   # log_2 4+log_2 8
+_LOGDIFF_SOURCE = re.compile(r"log_(\d{1,6}) (\d{1,6})-log_(\d{1,6}) (\d{1,6})")   # log_2 32-log_2 4
+_LOGPOWER_SOURCE = re.compile(r"log_(\d{1,6}) \((\d{1,6})\^(\d{1,6})\)")          # log_2 (4^3)
+_NUMBER_TEXT = re.compile(r"(\d{1,6})(?:\.(\d{1,3}))?")                             # 5 or 2.5
+_LOG_TEXT = re.compile(r"log_(\d{1,6}) (\d{1,6})")                                  # log_2 12
 
 _CODES_BY_LAW = {
     "product": {"MULTIPLIED_EXPONENTS", "MULTIPLIED_BASES", "SUBTRACTED_EXPONENTS"},
@@ -265,8 +393,14 @@ _CODES_BY_LAW = {
               "LOG_NUMBER_AND_RESULT_SWAPPED"},
     "toindex": {"INDEX_BASE_AND_EXPONENT_SWAPPED", "INDEX_BASE_AND_VALUE_SWAPPED",
                 "INDEX_EXPONENT_AND_VALUE_SWAPPED"},
+    "logvalue": {"DIVIDED_VALUE_BY_BASE", "SUBTRACTED_BASE_FROM_VALUE",
+                 "COUNTED_MULTIPLICATION_SIGNS"},
+    "logsum": {"LOG_OF_SUM", "MULTIPLIED_LOG_VALUES", "LOGS_IGNORED_NUMBERS_ADDED"},
+    "logdiff": {"LOG_OF_DIFFERENCE", "DIVIDED_LOG_VALUES", "LOGS_IGNORED_NUMBERS_DIVIDED"},
+    "logpower": {"LOG_RAISED_TO_POWER", "POWER_ADDED_TO_LOG", "POWER_IGNORED"},
 }
 _STATEMENT_LAWS = {"tolog", "toindex"}  # options are equations, not numbers
+_LOG_LAWS = {"logvalue", "logsum", "logdiff", "logpower"}  # options are numbers or logs
 
 
 def _checked_power(base: int, numerator: int, denominator: int = 1):
@@ -294,6 +428,37 @@ def _power_equals(base: int, exponent: int, value: int) -> bool:
     return result == value
 
 
+def _log_exact(base: int, number: int):
+    """The whole number e with base^e == number, or None. Needs base >= 2."""
+    if base < 2 or number < 1:
+        raise ValueError("The base or the number of a logarithm is outside the allowed range.")
+    result, exponent = 1, 0
+    while result < number:
+        result *= base
+        exponent += 1
+    return exponent if result == number else None
+
+
+def _log_value(base: int, number: int):
+    """A whole number when log_base(number) is whole, otherwise a tuple that names the log."""
+    exponent = _log_exact(base, number)
+    return Integer(exponent) if exponent is not None else ("log", base, number)
+
+
+def _number_value(text: str):
+    """Read '5', '2.5' or 'log_2 12' (no eval, no sympify)."""
+    text = text.strip()
+    match = _LOG_TEXT.fullmatch(text)
+    if match:
+        return _log_value(int(match[1]), int(match[2]))
+    match = _NUMBER_TEXT.fullmatch(text)
+    if match:
+        if match[2] is None:
+            return Integer(int(match[1]))
+        return Rational(int(match[1] + match[2]), 10 ** len(match[2]))
+    raise ValueError(f"Unreadable number: {text!r}")
+
+
 def _statement_value(law: str, text: str) -> tuple:
     """Read 'log_2 32 = 5' (tolog) or '3^4 = 81' (toindex) into three numbers."""
     pattern = _LOG_STATEMENT if law == "tolog" else _INDEX_STATEMENT
@@ -317,6 +482,8 @@ def _option_value(law: str, text: str):
     """One reader for every law: numbers for the first three, three-number tuples for the rest."""
     if law in _STATEMENT_LAWS:
         return _statement_value(law, text)
+    if law in _LOG_LAWS:
+        return _number_value(text)
     return _power_value(text)
 
 
@@ -366,6 +533,32 @@ def _parse_source(source_expression: str):
         if base < 2:
             raise ValueError("The base is outside the allowed range.")
         return "toindex", base, exponent, value
+    match = _LOGSUM_SOURCE.fullmatch(text) or _LOGDIFF_SOURCE.fullmatch(text)
+    if match:
+        law = "logsum" if "+" in text else "logdiff"
+        b1, big_m, b2, big_n = (int(g) for g in match.groups())
+        if b1 != b2:
+            raise ValueError("Both logarithms must have the same base.")
+        i, j = _log_exact(b1, big_m), _log_exact(b1, big_n)
+        if i is None or j is None:
+            raise ValueError("Each number must be a whole power of the base.")
+        if law == "logdiff" and i <= j:
+            raise ValueError("The first number must be bigger than the second.")
+        return law, b1, i, j
+    match = _LOGPOWER_SOURCE.fullmatch(text)
+    if match:
+        base, inner, power = (int(g) for g in match.groups())
+        k = _log_exact(base, inner)
+        if k is None or k > MAX_EXPONENT or power > MAX_EXPONENT:
+            raise ValueError("The question numbers are outside the allowed range.")
+        return "logpower", base, k, power
+    match = _LOGVALUE_SOURCE.fullmatch(text)
+    if match:
+        base, number = (int(g) for g in match.groups())
+        exponent = _log_exact(base, number)
+        if exponent is None:
+            raise ValueError("The number must be a whole power of the base.")
+        return "logvalue", base, exponent, number
     raise ValueError("Unknown question pattern.")
 
 
@@ -378,6 +571,14 @@ def _expected_value(source_expression: str):
         return _checked_power(base, m) / _checked_power(base, n)
     if law == "power":
         return _checked_power(base, m) ** n  # (base^m)^n
+    if law == "logvalue":  # m = exponent
+        return Integer(m)
+    if law == "logsum":  # m = i, n = j
+        return Integer(m + n)
+    if law == "logdiff":
+        return Integer(m - n)
+    if law == "logpower":  # m = k, n = r
+        return Integer(m * n)
     # tolog / toindex: m = exponent, n = value. The statement in the question must be true.
     if not _power_equals(base, m, n):
         raise ValueError("The statement in the question is false.")
@@ -404,6 +605,31 @@ def _evidence_value(code: str, base: int, m: int, n: int):
         return Integer(n) * _checked_power(base, m)
     if code == "POWER_ONLY_ON_EXPONENT":
         return _checked_power(base, m ** n)
+    # log laws.  logvalue: m = exponent, n = number.  logsum/logdiff: m = i, n = j.  logpower: m = k, n = r
+    if code == "DIVIDED_VALUE_BY_BASE":
+        return Integer(n // base)
+    if code == "SUBTRACTED_BASE_FROM_VALUE":
+        return Integer(n - base)
+    if code == "COUNTED_MULTIPLICATION_SIGNS":
+        return Integer(m - 1)
+    if code == "LOG_OF_SUM":
+        return _log_value(base, base ** m + base ** n)
+    if code == "MULTIPLIED_LOG_VALUES":
+        return Integer(m * n)
+    if code == "LOGS_IGNORED_NUMBERS_ADDED":
+        return Integer(base ** m + base ** n)
+    if code == "LOG_OF_DIFFERENCE":
+        return _log_value(base, base ** m - base ** n)
+    if code == "DIVIDED_LOG_VALUES":
+        return Rational(m, n)
+    if code == "LOGS_IGNORED_NUMBERS_DIVIDED":
+        return Integer(base ** m // base ** n)
+    if code == "LOG_RAISED_TO_POWER":
+        return Integer(m ** n)
+    if code == "POWER_ADDED_TO_LOG":
+        return Integer(m + n)
+    if code == "POWER_IGNORED":
+        return Integer(m)
     # conversion laws: base, m = exponent, n = value
     if code == "LOG_BASE_AND_NUMBER_SWAPPED":
         return (n, base, m)
@@ -480,12 +706,24 @@ MISCONCEPTIONS = {
     "ADDED_EXPONENTS_POWER": "The exponents were added instead of multiplied in a power of a power.",
     "EXPONENT_AS_MULTIPLIER": "The outer exponent was treated as a multiplier instead of a power.",
     "POWER_ONLY_ON_EXPONENT": "Only the exponent was raised to the outer power; the base was left out.",
-        "LOG_BASE_AND_NUMBER_SWAPPED": "The base and the number were swapped when writing the logarithm.",
+    "LOG_BASE_AND_NUMBER_SWAPPED": "The base and the number were swapped when writing the logarithm.",
     "LOG_BASE_AND_RESULT_SWAPPED": "The exponent was used as the base of the logarithm.",
     "LOG_NUMBER_AND_RESULT_SWAPPED": "The number and the answer of the logarithm were swapped.",
     "INDEX_BASE_AND_EXPONENT_SWAPPED": "The base and the exponent were swapped when writing the index form.",
     "INDEX_BASE_AND_VALUE_SWAPPED": "The number inside the logarithm was used as the base of the index form.",
     "INDEX_EXPONENT_AND_VALUE_SWAPPED": "The number inside the logarithm was used as the exponent.",
+    "DIVIDED_VALUE_BY_BASE": "The number was divided by the base instead of finding the power.",
+    "SUBTRACTED_BASE_FROM_VALUE": "The base was subtracted from the number instead of finding the power.",
+    "COUNTED_MULTIPLICATION_SIGNS": "The multiplication signs were counted instead of the factors.",
+    "LOG_OF_SUM": "The numbers were added inside one logarithm instead of adding the logarithms.",
+    "MULTIPLIED_LOG_VALUES": "The values of the logarithms were multiplied instead of added.",
+    "LOGS_IGNORED_NUMBERS_ADDED": "The logarithms were ignored and the numbers were added.",
+    "LOG_OF_DIFFERENCE": "The numbers were subtracted inside one logarithm instead of subtracting the logarithms.",
+    "DIVIDED_LOG_VALUES": "The values of the logarithms were divided instead of subtracted.",
+    "LOGS_IGNORED_NUMBERS_DIVIDED": "The logarithms were ignored and the numbers were divided.",
+    "LOG_RAISED_TO_POWER": "The logarithm was raised to the power instead of multiplying by the power.",
+    "POWER_ADDED_TO_LOG": "The power was added to the logarithm instead of multiplying.",
+    "POWER_IGNORED": "The power inside the logarithm was ignored.",
 }
 
 _FEEDBACK = {
@@ -504,6 +742,18 @@ _FEEDBACK = {
     "INDEX_BASE_AND_EXPONENT_SWAPPED": "You may have swapped the base and the exponent. The base of the log becomes the base of the power.",
     "INDEX_BASE_AND_VALUE_SWAPPED": "You may have used the number inside the log as the base. The number inside the log is the value of the power.",
     "INDEX_EXPONENT_AND_VALUE_SWAPPED": "You may have used the number inside the log as the exponent. The answer of the log is the exponent.",
+    "DIVIDED_VALUE_BY_BASE": "You may have divided the number by the base. A log asks: which POWER of the base gives the number?",
+    "SUBTRACTED_BASE_FROM_VALUE": "You may have subtracted the base from the number. A log asks: which POWER of the base gives the number?",
+    "COUNTED_MULTIPLICATION_SIGNS": "You may have counted the multiplication signs. Count how many times the base is multiplied (the number of factors).",
+    "LOG_OF_SUM": "You may have added the numbers inside one log. log a + log b = log (a x b); the numbers are multiplied, not added.",
+    "MULTIPLIED_LOG_VALUES": "You may have multiplied the log values. The sum law says to ADD the logs of the same base.",
+    "LOGS_IGNORED_NUMBERS_ADDED": "You may have dropped the logs and added the numbers. First find the value of each log, then add those values.",
+    "LOG_OF_DIFFERENCE": "You may have subtracted the numbers inside one log. log a - log b = log (a / b); the numbers are divided, not subtracted.",
+    "DIVIDED_LOG_VALUES": "You may have divided the log values. For a difference of logs, SUBTRACT the two log values.",
+    "LOGS_IGNORED_NUMBERS_DIVIDED": "You may have dropped the logs and divided the numbers. First find the value of each log, then subtract those values.",
+    "LOG_RAISED_TO_POWER": "You may have raised the log to the power. The power law is log (a^n) = n x log a: the power is a multiplier.",
+    "POWER_ADDED_TO_LOG": "You may have added the power to the log. The power law says to MULTIPLY: log (a^n) = n x log a.",
+    "POWER_IGNORED": "You may have ignored the power. The power comes down in front as a multiplier: log (a^n) = n x log a.",
 }
 
 _RECOMMENDATIONS = {
@@ -522,6 +772,18 @@ _RECOMMENDATIONS = {
     "INDEX_BASE_AND_EXPONENT_SWAPPED": "Use a colour code on log_3 81 = 4: the small base number stays the base of the power. Rewrite as 3^4 = 81.",
     "INDEX_BASE_AND_VALUE_SWAPPED": "Stress that the number inside the log is the value of the power (the big number), never the base.",
     "INDEX_EXPONENT_AND_VALUE_SWAPPED": "Stress that the answer of the log is the exponent. Read log_3 81 = 4 as '3 to the power 4 gives 81'.",
+    "DIVIDED_VALUE_BY_BASE": "Ask 'which power of the base gives the number?' and practise with 2x2x2 = 8 so the answer is the number of 2s, not 8 / 2.",
+    "SUBTRACTED_BASE_FROM_VALUE": "Build a small table of powers of 2 and 3 and read it backwards: 'which power gives 32?'",
+    "COUNTED_MULTIPLICATION_SIGNS": "Write 2x2x2x2x2 and circle the factors, not the 'x' signs: five 2s means log_2 32 = 5.",
+    "LOG_OF_SUM": "Show with numbers that log_2 4 + log_2 8 = 2 + 3 = 5 but log_2 (4 + 8) is not 5; the product law uses multiplication.",
+    "MULTIPLIED_LOG_VALUES": "Evaluate each log first, then show that adding logs matches multiplying the numbers inside: log_2 4 + log_2 8 = log_2 32.",
+    "LOGS_IGNORED_NUMBERS_ADDED": "Stress that 'log' is not decoration. Evaluate each log first (a whole number), then combine the values.",
+    "LOG_OF_DIFFERENCE": "Show with numbers that log_2 32 - log_2 4 = 5 - 2 = 3 and equals log_2 (32 / 4) = log_2 8; subtraction becomes division inside the log.",
+    "DIVIDED_LOG_VALUES": "Practise evaluating both logs and then subtracting; contrast the sum law (add) and the difference law (subtract).",
+    "LOGS_IGNORED_NUMBERS_DIVIDED": "Stress that you cannot drop the logs. Evaluate each log first, then subtract the two values.",
+    "LOG_RAISED_TO_POWER": "Expand log_2 (4^3) = log_2 (4 x 4 x 4) = log_2 4 + log_2 4 + log_2 4 = 3 x 2, to show the power becomes a multiplier.",
+    "POWER_ADDED_TO_LOG": "Expand the power as repeated multiplication so students see 3 copies of log_2 4 are ADDED, which is multiplying by 3.",
+    "POWER_IGNORED": "Practise the power law with small numbers and check each answer by evaluating the number inside the log first.",
 }
 
 

@@ -28,6 +28,7 @@ def configuration() -> dict:
         "timeout_seconds": os.getenv(f"{PREFIX}_TIMEOUT_SECONDS", "4"),
     }
 
+
 # ---------- The shape we ask the model to return ----------
 
 class _AIOption(BaseModel):
@@ -62,11 +63,14 @@ _SCHEMA = {
 _BASES = [2, 3, 5, 6]
 
 
-
 def _pick_spec() -> tuple[str, int, int, int]:
     """OUR code chooses the law and the numbers. The model never does."""
     rng = random.SystemRandom()
-    law = rng.choice(["product", "quotient", "power", "tolog", "toindex"])
+    law = rng.choice(["product", "quotient", "power", "tolog", "toindex",
+                      "logvalue", "logsum", "logdiff", "logpower"])
+    if law in ("logvalue", "logsum", "logdiff", "logpower"):
+        base, m, n = rng.choice(manual.log_specs(law))  # only specs with 4 different values
+        return law, base, m, n
     if law in ("tolog", "toindex"):
         base, e = rng.choice(manual.conversion_specs(law))  # only specs with ONE true option
         return law, base, e, base ** e  # m = exponent, n = value
@@ -86,42 +90,71 @@ def _pick_spec() -> tuple[str, int, int, int]:
 
 
 _EXAMPLES = {  # base 7 is never used in real questions, so it cannot be copied
-        "product": (
+    "product": (
         "Simplify: 7^5 × 7^3",
         '{"options": [{"text": "7^8", "misconception": null}, '
         '{"text": "7^15", "misconception": "MULTIPLIED_EXPONENTS"}, '
         '{"text": "49^8", "misconception": "MULTIPLIED_BASES"}, '
         '{"text": "7^2", "misconception": "SUBTRACTED_EXPONENTS"}]}',
     ),
-        "quotient": (
+    "quotient": (
         "Simplify: 7^7 ÷ 7^3",
         '{"options": [{"text": "7^4", "misconception": null}, '
         '{"text": "7^10", "misconception": "ADDED_EXPONENTS"}, '
         '{"text": "7^(7/3)", "misconception": "DIVIDED_EXPONENTS"}, '
         '{"text": "1^4", "misconception": "DIVIDED_BASES"}]}',
     ),
-        "power": (
+    "power": (
         "Simplify: (7^2)^3",
         '{"options": [{"text": "7^6", "misconception": null}, '
         '{"text": "7^5", "misconception": "ADDED_EXPONENTS_POWER"}, '
         '{"text": "3 × 7^2", "misconception": "EXPONENT_AS_MULTIPLIER"}, '
         '{"text": "7^8", "misconception": "POWER_ONLY_ON_EXPONENT"}]}',
     ),
-        "tolog": (
+    "tolog": (
         "Write 7^2 = 49 in logarithmic form.",
         '{"options": [{"text": "log_7 49 = 2", "misconception": null}, '
         '{"text": "log_49 7 = 2", "misconception": "LOG_BASE_AND_NUMBER_SWAPPED"}, '
         '{"text": "log_2 49 = 7", "misconception": "LOG_BASE_AND_RESULT_SWAPPED"}, '
         '{"text": "log_7 2 = 49", "misconception": "LOG_NUMBER_AND_RESULT_SWAPPED"}]}',
     ),
-        "toindex": (
+    "toindex": (
         "Write log_7 49 = 2 in index form.",
         '{"options": [{"text": "7^2 = 49", "misconception": null}, '
         '{"text": "2^7 = 49", "misconception": "INDEX_BASE_AND_EXPONENT_SWAPPED"}, '
         '{"text": "49^2 = 7", "misconception": "INDEX_BASE_AND_VALUE_SWAPPED"}, '
         '{"text": "7^49 = 2", "misconception": "INDEX_EXPONENT_AND_VALUE_SWAPPED"}]}',
     ),
+    "logvalue": (
+        "Find the value of log_7 343.",
+        '{"options": [{"text": "3", "misconception": null}, '
+        '{"text": "49", "misconception": "DIVIDED_VALUE_BY_BASE"}, '
+        '{"text": "336", "misconception": "SUBTRACTED_BASE_FROM_VALUE"}, '
+        '{"text": "2", "misconception": "COUNTED_MULTIPLICATION_SIGNS"}]}',
+    ),
+    "logsum": (
+        "Find the value of log_7 49 + log_7 343.",
+        '{"options": [{"text": "5", "misconception": null}, '
+        '{"text": "log_7 392", "misconception": "LOG_OF_SUM"}, '
+        '{"text": "6", "misconception": "MULTIPLIED_LOG_VALUES"}, '
+        '{"text": "392", "misconception": "LOGS_IGNORED_NUMBERS_ADDED"}]}',
+    ),
+    "logdiff": (
+        "Find the value of log_7 16807 - log_7 49.",
+        '{"options": [{"text": "3", "misconception": null}, '
+        '{"text": "log_7 16758", "misconception": "LOG_OF_DIFFERENCE"}, '
+        '{"text": "2.5", "misconception": "DIVIDED_LOG_VALUES"}, '
+        '{"text": "343", "misconception": "LOGS_IGNORED_NUMBERS_DIVIDED"}]}',
+    ),
+    "logpower": (
+        "Find the value of log_7 (49^3).",
+        '{"options": [{"text": "6", "misconception": null}, '
+        '{"text": "8", "misconception": "LOG_RAISED_TO_POWER"}, '
+        '{"text": "5", "misconception": "POWER_ADDED_TO_LOG"}, '
+        '{"text": "2", "misconception": "POWER_IGNORED"}]}',
+    ),
 }
+
 
 _FORMAT_RULE = {
     "product": 'is ONLY a power like 3^6 (or a product like 3 × 2^4 when the mistake says so)',
@@ -129,8 +162,11 @@ _FORMAT_RULE = {
     "power": 'is ONLY a power like 3^6 (or a product like 3 × 2^4 when the mistake says so)',
     "tolog": 'is ONLY an equation written exactly like log_3 81 = 4 (log_, the base, a space, the number, " = ", the answer)',
     "toindex": 'is ONLY an equation written exactly like 3^4 = 81',
+    "logvalue": 'is ONLY a whole number like 5',
+    "logsum": 'is ONLY a whole number like 5, or a logarithm written exactly like log_2 12 when the mistake says so',
+    "logdiff": 'is ONLY a whole number like 3, a decimal like 2.5, or a logarithm written exactly like log_2 28 when the mistake says so',
+    "logpower": 'is ONLY a whole number like 6',
 }
-
 
 
 def _mistakes(law: str, base: int, m: int, n: int) -> tuple[str, str]:
@@ -142,6 +178,38 @@ def _mistakes(law: str, base: int, m: int, n: int) -> tuple[str, str]:
             f"  MULTIPLIED_BASES: the student adds the exponents ({m} + {n}) but also multiplies the bases "
             f"({base} × {base} = {base * base}), so the base becomes {base * base}\n"
             f"  SUBTRACTED_EXPONENTS: the student subtracts the exponents (bigger minus smaller) and keeps the base {base}",
+        )
+    if law == "logvalue":  # m = exponent, n = number
+        return (
+            f"count how many times {base} is multiplied to make {n}",
+            f"  DIVIDED_VALUE_BY_BASE: the student divides the number {n} by the base {base}\n"
+            f"  SUBTRACTED_BASE_FROM_VALUE: the student subtracts the base {base} from the number {n}\n"
+            f"  COUNTED_MULTIPLICATION_SIGNS: the student counts the multiplication signs instead of the "
+            f"factors, so the answer is one less than the correct one",
+        )
+    if law in ("logsum", "logdiff"):  # m = i, n = j
+        big_m, big_n = base ** m, base ** n
+        if law == "logsum":
+            return (
+                f"find log_{base} {big_m} and log_{base} {big_n}, then add the two values",
+                f"  LOG_OF_SUM: the student adds the numbers inside one log: write log_{base} {big_m + big_n}\n"
+                f"  MULTIPLIED_LOG_VALUES: the student multiplies the two log values ({m} × {n}) instead of adding\n"
+                f"  LOGS_IGNORED_NUMBERS_ADDED: the student drops the logs and just adds {big_m} + {big_n}",
+            )
+        return (
+            f"find log_{base} {big_m} and log_{base} {big_n}, then subtract the second value from the first",
+            f"  LOG_OF_DIFFERENCE: the student subtracts the numbers inside one log: write log_{base} {big_m - big_n}\n"
+            f"  DIVIDED_LOG_VALUES: the student divides the first log value by the second ({m} ÷ {n}); "
+            f"write it as a decimal like 2.5\n"
+            f"  LOGS_IGNORED_NUMBERS_DIVIDED: the student drops the logs and just divides {big_m} ÷ {big_n}",
+        )
+    if law == "logpower":  # m = k, n = r
+        inner = base ** m
+        return (
+            f"multiply the power {n} by log_{base} {inner} (which is {m})",
+            f"  LOG_RAISED_TO_POWER: the student raises the log value {m} to the power {n}\n"
+            f"  POWER_ADDED_TO_LOG: the student adds the power {n} to the log value {m}\n"
+            f"  POWER_IGNORED: the student ignores the power {n} and gives log_{base} {inner}",
         )
     if law == "tolog":  # m = exponent, n = value
         return (
@@ -158,7 +226,6 @@ def _mistakes(law: str, base: int, m: int, n: int) -> tuple[str, str]:
             f"  INDEX_BASE_AND_VALUE_SWAPPED: the student swaps the base {base} and the value {n}\n"
             f"  INDEX_EXPONENT_AND_VALUE_SWAPPED: the student swaps the exponent {m} and the value {n}",
         )
-
     if law == "power":
         return (
             f"multiply the exponents ({m} × {n}) and keep the base {base}",
@@ -167,7 +234,6 @@ def _mistakes(law: str, base: int, m: int, n: int) -> tuple[str, str]:
             f"  POWER_ONLY_ON_EXPONENT: the student raises only the exponent {m} to the power {n} "
             f"({m}^{n} = {m ** n}) and keeps the base {base}: {base}^{m ** n}",
         )
-    
     return (
         f"subtract the exponents ({m} - {n}) and keep the base {base}",
         f"  ADDED_EXPONENTS: the student adds the exponents ({m} + {n}) and keeps the base {base}\n"
@@ -258,6 +324,7 @@ def generate_question(difficulty: str) -> InternalQuestion:
     law, base, m, n = spec
     raw_text = _call_ollama(_build_prompt(law, base, m, n, difficulty), cfg)
     return _to_question(raw_text, spec, difficulty)
+
 
 def analyze_answer(context: dict) -> Analysis:
     # TODO: Call your chosen provider using the mathematical context supplied
