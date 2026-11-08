@@ -9,12 +9,17 @@ from uuid import uuid4
 import httpx
 from pydantic import BaseModel, Field
 
-from app.answer_verification import Analysis
+from app.answer_verification import Analysis, setting
 from app.contracts import InternalOption, InternalQuestion
 from . import manual
 
 PREFIX = "MATHROOT_INDICES_LOGS"
 DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
+
+# The AI call must always have a finite, sensible time limit (same rule as the shared verifier).
+DEFAULT_TIMEOUT_SECONDS = 4.0
+MIN_TIMEOUT_SECONDS = 0.1
+MAX_TIMEOUT_SECONDS = 15.0
 
 
 def configuration() -> dict:
@@ -25,7 +30,7 @@ def configuration() -> dict:
         "model": os.getenv(f"{PREFIX}_MODEL", "").strip(),
         "base_url": os.getenv(f"{PREFIX}_BASE_URL", "").strip(),
         "api_key": os.getenv(f"{PREFIX}_API_KEY", ""),
-        "timeout_seconds": os.getenv(f"{PREFIX}_TIMEOUT_SECONDS", "4"),
+        "timeout_seconds": setting(f"{PREFIX}_TIMEOUT_SECONDS",DEFAULT_TIMEOUT_SECONDS, MIN_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS,),
     }
 
 

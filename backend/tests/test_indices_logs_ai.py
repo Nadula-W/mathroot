@@ -303,3 +303,76 @@ def test_generator_falls_back_when_ai_lies(configured, monkeypatch):
     question = generator.generate_question("easy")
     manual.validate_question(question)
     assert question.explanation  # a valid question came back anyway
+
+# ---------- AI timeout: validated and limited ----------
+
+TIMEOUT_NAME = "MATHROOT_INDICES_LOGS_TIMEOUT_SECONDS"
+
+
+def test_timeout_defaults_to_four_seconds(monkeypatch):
+    monkeypatch.delenv(TIMEOUT_NAME, raising=False)
+    assert ai.configuration()["timeout_seconds"] == 4.0
+
+
+@pytest.mark.parametrize("value, expected", [
+    ("7.5", 7.5),
+    ("0.1", 0.1),     # lowest allowed
+    ("15", 15.0),     # highest allowed
+    ("1", 1.0),
+])
+def test_timeout_inside_the_limits_is_used(monkeypatch, value, expected):
+    monkeypatch.setenv(TIMEOUT_NAME, value)
+    assert ai.configuration()["timeout_seconds"] == expected
+
+
+@pytest.mark.parametrize("value", [
+    "abc", "", "  ", "0", "-3", "0.05", "15.01", "60", "999999", "nan", "inf", "-inf", "4;5",
+])
+def test_bad_timeout_values_use_the_default(monkeypatch, value):
+    monkeypatch.setenv(TIMEOUT_NAME, value)
+    assert ai.configuration()["timeout_seconds"] == 4.0
+
+
+class _FakeResponse:
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return {"message": {"content": json.dumps(GOOD_PRODUCT)}}
+
+
+def _capture_http_timeout(monkeypatch):
+    captured = {}
+
+    def fake_post(url, json=None, timeout=None):
+        captured["timeout"] = timeout
+        return _FakeResponse()
+
+    monkeypatch.setattr(ai.httpx, "post", fake_post)
+    monkeypatch.setattr(ai, "_pick_spec", lambda: SPECS["product"])
+    return captured
+
+
+def test_the_checked_timeout_reaches_the_http_call(configured, monkeypatch):
+    captured = _capture_http_timeout(monkeypatch)
+    monkeypatch.setenv(TIMEOUT_NAME, "7.5")
+    manual.validate_question(ai.generate_question("easy"))
+    assert captured["timeout"] == 7.5
+
+
+def test_a_huge_timeout_setting_cannot_reach_the_http_call(configured, monkeypatch):
+    captured = _capture_http_timeout(monkeypatch)
+    monkeypatch.setenv(TIMEOUT_NAME, "999")
+    ai.generate_question("easy")
+    assert captured["timeout"] == 4.0
+
+
+@pytest.mark.parametrize("error", [
+    httpx.ReadTimeout("model too slow"),
+    httpx.ConnectTimeout("cannot connect in time"),
+])
+def test_generator_falls_back_when_the_model_times_out(configured, monkeypatch, error):
+    def too_slow(prompt, cfg):
+        raise error
+    monkeypatch.setattr(ai, "_call_ollama", too_slow)
+    manual.validate_question(generator.generate_question("easy"))

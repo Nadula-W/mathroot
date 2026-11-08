@@ -1,0 +1,3 @@
+add custom question to sir 
+and view the questions before sending 
+add both custom questions to ai generated wuestions and those answers should be explained by thr ollama
