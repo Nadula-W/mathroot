@@ -1,9 +1,9 @@
 """Nimsara: AI-first question generation and the existing TopicModule adapter.
 
-Unfinished: do not register this topic until manual and AI paths are validated.
+Provider failures fall back to independently validated manual mathematics.
 """
 from app.contracts import InternalQuestion
-from . import ai, manual
+from . import ai, manual, presentation
 
 
 def generate_question(difficulty: str) -> InternalQuestion:
@@ -15,6 +15,8 @@ def generate_question(difficulty: str) -> InternalQuestion:
     else:
         try:
             question = ai.generate_question(difficulty)
+            if question.difficulty != difficulty:
+                raise ValueError("Provider returned the wrong difficulty.")
             # Never trust a provider's answer key without deterministic checking.
             manual.validate_question(question)
             return question
@@ -29,8 +31,7 @@ def generate_question(difficulty: str) -> InternalQuestion:
 class EquationsTopic:
     topic_id = "equations"
     title = "Equations"
-    # TODO: Populate with stable codes supported by your diagnostic distractors.
-    misconception_definitions: dict[str, str] = {}
+    misconception_definitions = manual.MISCONCEPTIONS
 
     def generate_question(self, difficulty: str) -> InternalQuestion:
         return generate_question(difficulty)
@@ -47,17 +48,11 @@ class EquationsTopic:
 
 
     def presentation_text(self, field: str, text: str, question=None, misconception=None):
-        # TODO: Match reviewed English/Sinhala templates by exact full text.
-        # Cover statement, explanation, feedback and teaching recommendations.
-        # Keep every mathematical expression unchanged. None means English + warning.
-        return None
+        return presentation.presentation_text(field, text, question, misconception)
 
     def translation_provider(self):
         # Optional: use this topic's own provider, never Nadula's configuration.
         return ai.TopicTranslationProvider()
 
     def validate_translation(self, field: str, source: str, translated: str, question=None) -> bool:
-        # TODO: Semantically approve only reviewed pairs or deterministic topic
-        # templates. Placeholder checks alone cannot prove a translation correct.
-        # Until implemented, all AI translations safely remain English.
-        return False
+        return presentation.validate_translation(field, source, translated, question)
