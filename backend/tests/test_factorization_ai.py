@@ -58,15 +58,47 @@ def test_generator_fallback_when_ai_down(configured, monkeypatch):
         raise httpx.ConnectError("Ollama offline")
 
     monkeypatch.setattr(ai, "_call_ollama", broken)
-    q = generator.generate_question("easy")
-    manual.validate_question(q)
-    assert q.explanation
+    for difficulty in ["easy", "medium", "hard"]:
+        q = generator.generate_question(difficulty)
+        manual.validate_question(q)
+        assert q.difficulty == difficulty
+        assert q.explanation
 
 
 def test_generator_fallback_when_ai_hallucinates(configured, monkeypatch):
     bad = json.loads(json.dumps(GOOD_AI_RESPONSE))
     bad["options"][0]["text"] = "(x - 99)(x + 99)"
     _fake_model(monkeypatch, bad)
-    q = generator.generate_question("easy")
-    manual.validate_question(q)
-    assert q.explanation
+    for difficulty in ["easy", "medium", "hard"]:
+        q = generator.generate_question(difficulty)
+        manual.validate_question(q)
+        assert q.difficulty == difficulty
+        assert q.explanation
+
+
+def test_hard_ai_spec_diversity():
+    """Verify hard AI question generation produces diverse questions without duplicates."""
+    from sympy import Symbol, expand, simplify
+    x = Symbol("x")
+
+    specs = set()
+    for _ in range(60):
+        a, b, c, factors = ai._pick_spec("hard")
+        specs.add((a, b, c, factors))
+        poly = manual._parse_option_expr(factors)
+        expected = expand(a * x**2 + b * x + c)
+        assert simplify(poly - expected) == 0
+
+    # Ensure a rich variety of different quadratic questions are generated
+    assert len(specs) >= 10, f"Expected at least 10 distinct specs, got {len(specs)}"
+
+
+def test_manual_mode_generation_all_levels(monkeypatch):
+    monkeypatch.setenv("MATHROOT_FACTORIZATION_MODE", "manual")
+    for difficulty in ["easy", "medium", "hard"]:
+        for _ in range(5):
+            q = generator.generate_question(difficulty)
+            manual.validate_question(q)
+            assert q.difficulty == difficulty
+            assert q.explanation
+

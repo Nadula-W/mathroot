@@ -65,7 +65,7 @@ def _call_ollama(prompt: str, cfg: dict) -> str:
                 "role": "system",
                 "content": (
                     "You are a mathematics question generator for secondary school quadratic factorization. "
-                    "Output JSON ONLY matching: {\"options\": [{\"text\": \"(x + a)(x + b)\", \"misconception\": null or string}]}. "
+                    "Output JSON ONLY matching: {\"options\": [{\"text\": \"(ax + b)(cx + d)\", \"misconception\": null or string}]}. "
                     "Exactly one option must have misconception null (the correct factorization). "
                     "All other options must have one of these misconception codes: "
                     f"{list(manual.MISCONCEPTIONS.keys())}."
@@ -85,15 +85,38 @@ def _pick_spec(difficulty: str) -> tuple[int, int, int, str]:
     """Pick quadratic coefficients (a, b, c, expected_factors). OUR code chooses the math."""
     rng = random.SystemRandom()
     if difficulty == "easy":
-        d = rng.choice([2, 3, 4, 5])
+        d = rng.choice([2, 3, 4, 5, 6, 7, 8, 9])
         return 1, 0, -(d * d), f"(x - {d})(x + {d})"
     if difficulty == "medium":
-        candidates = [(4, 2), (5, 2), (6, 3), (5, 3), (4, 3)]
+        candidates = [(4, 2), (5, 2), (6, 3), (5, 3), (4, 3), (7, 2), (6, 4), (8, 2), (5, 4), (7, 3)]
         p, q = rng.choice(candidates)
         return 1, p - q, -(p * q), f"(x + {p})(x - {q})"
     # hard
-    a, p, q = 2, 1, 3
-    return a, a * q + p, p * q, f"({a}x + {p})(x + {q})"
+    sub = rng.choice(["non_monic_pos", "non_monic_neg", "diff_squares_coeff"])
+    if sub == "non_monic_pos":
+        candidates = [
+            (2, 1, 3), (2, 1, 4), (2, 1, 5), (2, 3, 1), (2, 3, 2), (2, 3, 4), (2, 3, 5),
+            (3, 1, 2), (3, 1, 4), (3, 1, 5), (3, 2, 1), (3, 2, 4), (3, 2, 5),
+            (2, 5, 1), (2, 5, 3), (3, 4, 1), (3, 5, 1), (3, 5, 2),
+            (4, 1, 3), (4, 3, 1), (5, 1, 2), (5, 2, 1),
+        ]
+        a, p, q = rng.choice(candidates)
+        return a, a * q + p, p * q, f"({a}x + {p})(x + {q})"
+    if sub == "non_monic_neg":
+        candidates = [
+            (2, 1, 3), (2, 1, 4), (2, 1, 5), (2, 3, 1), (2, 3, 2), (2, 3, 4),
+            (3, 1, 2), (3, 1, 4), (3, 2, 1), (3, 2, 4),
+            (2, 5, 1), (3, 4, 1), (4, 1, 3), (5, 1, 2),
+        ]
+        a, p, q = rng.choice(candidates)
+        if rng.choice([True, False]):
+            return a, a * q - p, -(p * q), f"({a}x - {p})(x + {q})"
+        else:
+            return a, p - a * q, -(p * q), f"({a}x + {p})(x - {q})"
+    # diff_squares_coeff
+    a = rng.choice([2, 3, 4, 5])
+    d = rng.choice([1, 2, 3, 5, 7])
+    return a * a, 0, -(d * d), f"({a}x - {d})({a}x + {d})"
 
 
 def _build_prompt(difficulty: str) -> tuple[str, str, str, str]:

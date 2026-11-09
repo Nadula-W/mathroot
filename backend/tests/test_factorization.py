@@ -121,3 +121,48 @@ def test_topic_adapter_and_bilingual_presentation():
     # Validation of translation
     assert topic.validate_translation("teaching_recommendation", teaching_recommendation("SIGN_ERROR"), si_rec) is True
     assert topic.validate_translation("teaching_recommendation", teaching_recommendation("SIGN_ERROR"), "Wrong text") is False
+
+
+def test_sinhala_explanations_and_feedback_all_levels():
+    """Verify that all difficulty levels provide complete Sinhala explanations and feedback."""
+    import re
+    from app.presentation import feedback_translation
+
+    topic = FactorizationTopic()
+    sinhala_pattern = re.compile(r"[\u0D80-\u0DFF]")
+
+    for difficulty in ["easy", "medium", "hard"]:
+        for seed in range(10):
+            q = generate_question(difficulty, random.Random(seed))
+            validate_question(q)
+
+            # 1. Explanation translation in Sinhala
+            si_expl = topic.presentation_text("explanation", q.explanation, question=q)
+            assert si_expl is not None, f"Explanation translation missing for: {q.explanation}"
+            assert sinhala_pattern.search(si_expl), f"Explanation has no Sinhala characters: {si_expl}"
+            assert topic.validate_translation("explanation", q.explanation, si_expl, question=q) is True
+
+            # 2. Feedback translation in Sinhala
+            for code in list(MISCONCEPTIONS.keys()) + [None]:
+                fb = feedback(q, code)
+                si_fb = topic.presentation_text("feedback", fb, question=q)
+                assert si_fb is not None, f"Feedback translation missing for code {code}"
+                assert sinhala_pattern.search(si_fb), f"Feedback has no Sinhala: {si_fb}"
+                assert topic.validate_translation("feedback", fb, si_fb, question=q) is True
+
+            # 3. Full feedback_translation pipeline has zero missing field warnings
+            detail = {
+                "statement": q.statement,
+                "explanation": q.explanation,
+                "feedback": feedback(q, "SIGN_ERROR"),
+                "corrective_guidance": "Check that the product of the constants equals the last term and their sum gives the middle coefficient upon expansion.",
+                "teaching_recommendation": teaching_recommendation("SIGN_ERROR"),
+                "suspected_misconception": "SIGN_ERROR",
+            }
+            res = feedback_translation(q, detail, topic)
+            assert res["translation_warnings"] == [], f"Unexpected warnings: {res['translation_warnings']}"
+            si_res = res["translations"]["si"]
+            assert sinhala_pattern.search(si_res["explanation"])
+            assert sinhala_pattern.search(si_res["feedback"])
+            assert sinhala_pattern.search(si_res["statement"])
+
