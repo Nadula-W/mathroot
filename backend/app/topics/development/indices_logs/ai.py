@@ -68,11 +68,10 @@ _SCHEMA = {
 _BASES = [2, 3, 5, 6]
 
 
-def _pick_spec() -> tuple[str, int, int, int]:
-    """OUR code chooses the law and the numbers. The model never does."""
+def _pick_spec(difficulty: str = "easy") -> tuple[str, int, int, int]:
+    """OUR code chooses the law (from the level's families) and the numbers. The model never does."""
     rng = random.SystemRandom()
-    law = rng.choice(["product", "quotient", "power", "tolog", "toindex",
-                      "logvalue", "logsum", "logdiff", "logpower"])
+    law = rng.choice(manual.LEVEL_LAWS[difficulty])
     if law in ("logvalue", "logsum", "logdiff", "logpower"):
         base, m, n = rng.choice(manual.log_specs(law))  # only specs with 4 different values
         return law, base, m, n
@@ -325,7 +324,7 @@ def generate_question(difficulty: str) -> InternalQuestion:
         raise RuntimeError("No model is configured for indices_logs.")
     if cfg["provider"] not in ("", "ollama"):
         raise RuntimeError("Unsupported provider.")
-    spec = _pick_spec()
+    spec = _pick_spec(difficulty)
     law, base, m, n = spec
     raw_text = _call_ollama(_build_prompt(law, base, m, n, difficulty), cfg)
     return _to_question(raw_text, spec, difficulty)

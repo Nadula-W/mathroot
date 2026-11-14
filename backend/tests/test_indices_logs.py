@@ -301,3 +301,74 @@ def test_log_codes_must_match_their_values():
     ]
     with pytest.raises(ValueError):
         validate_question(replace(question, options=options))
+
+
+# ---------- difficulty levels ----------
+
+LEVELS = ["easy", "medium", "hard"]
+EXPECTED_FAMILIES = {
+    "easy": {"tolog", "toindex", "logvalue", "product"},
+    "medium": {"quotient", "logsum", "logdiff"},
+    "hard": {"power", "logpower"},
+}
+
+
+def _family(question):
+    from app.topics.development.indices_logs.manual import _parse_source
+    return _parse_source(question.source_expression)[0]
+
+
+@pytest.mark.parametrize("level", LEVELS)
+def test_each_level_gives_exactly_its_own_families(level):
+    rng = random.Random(50)
+    seen = {_family(generate_question(level, rng)) for _ in range(400)}
+    assert seen == EXPECTED_FAMILIES[level]
+
+
+def test_levels_do_not_share_families_and_together_cover_all_nine():
+    from app.topics.development.indices_logs.manual import LEVEL_LAWS
+    every_family = [law for laws in LEVEL_LAWS.values() for law in laws]
+    assert len(every_family) == len(set(every_family)) == 9
+    assert set(every_family) == set(ALL_LAWS)
+    assert {level: set(laws) for level, laws in LEVEL_LAWS.items()} == EXPECTED_FAMILIES
+
+
+@pytest.mark.parametrize("level", LEVELS)
+def test_a_question_carries_its_level(level):
+    assert generate_question(level, random.Random(51)).difficulty == level
+
+
+@pytest.mark.parametrize("level", LEVELS)
+def test_each_level_has_enough_different_questions(level):
+    rng = random.Random(52)
+    different = {generate_question(level, rng).source_expression for _ in range(3000)}
+    assert len(different) >= 40
+
+
+def test_a_wrong_level_name_is_rejected():
+    with pytest.raises(ValueError):
+        generate_question("impossible", random.Random(54))
+
+
+def test_an_explicit_law_still_works_at_any_level():
+    for level in LEVELS:
+        question = generate_question(level, random.Random(55), law="power")
+        validate_question(question)
+        assert question.difficulty == level
+
+
+@pytest.mark.parametrize("level", LEVELS)
+def test_every_mcq_has_one_correct_and_three_different_labelled_wrong_answers(level):
+    from app.topics.development.indices_logs.manual import _CODES_BY_LAW
+    rng = random.Random(53)
+    for _ in range(300):
+        question = generate_question(level, rng)
+        assert len(question.options) == 4
+        correct = [o for o in question.options if o.id == question.correct_option_id]
+        assert len(correct) == 1 and correct[0].misconception is None
+        wrong = [o for o in question.options if o.id != question.correct_option_id]
+        assert len(wrong) == 3
+        codes = [o.misconception for o in wrong]
+        assert all(codes) and len(set(codes)) == 3          # 3 different diagnostic labels
+        assert set(codes) == _CODES_BY_LAW[_family(question)]  # labels belong to this family
+        assert len({o.text for o in question.options}) == 4    # 4 different option texts

@@ -11,6 +11,16 @@ from app.contracts import InternalOption, InternalQuestion
 
 TOPIC_ID = "indices_logs"
 
+# Which question families each difficulty level uses (every family is in exactly one level).
+#   easy   = recognising and reading: index <-> log conversion, the value of a log, the product law
+#   medium = applying one law: the quotient law, the sum law and the difference law of logs
+#   hard   = a power applied to a power: power of a power, and the power law of logs
+LEVEL_LAWS = {
+    "easy": ["tolog", "toindex", "logvalue", "product"],
+    "medium": ["quotient", "logsum", "logdiff"],
+    "hard": ["power", "logpower"],
+}
+
 
 # ---------- Part 1: question builders (one per law) ----------
 
@@ -162,12 +172,12 @@ def log_specs(law: str) -> list:
     if law == "logvalue":
         candidates = [(b, e, b ** e) for b in (2, 3, 5, 10) for e in range(2, 6)]
     elif law == "logsum":
-        candidates = [(b, i, j) for b in (2, 3, 5) for i in range(1, 5) for j in range(i + 1, 5)]
+        candidates = [(b, i, j) for b in (2, 3, 5) for i in range(1, 6) for j in range(i + 1, 6)]
     elif law == "logdiff":
-        candidates = [(b, i, j) for b in (2, 3, 5) for i in range(2, 6) for j in range(1, i)
+        candidates = [(b, i, j) for b in (2, 3, 5) for i in range(2, 7) for j in range(1, i)
                       if Rational(i, j).q in (2, 4, 5)]  # i/j must be a short decimal
     else:
-        candidates = [(b, k, r) for b in (2, 3, 5) for k in range(2, 5) for r in range(2, 5)]
+        candidates = [(b, k, r) for b in (2, 3, 5, 6) for k in range(2, 5) for r in range(2, 5)]
 
     specs = []
     for base, m, n in candidates:
@@ -270,13 +280,14 @@ def _generate_with_retry(builder, rng, tries=20) -> _Draft:
 # ---------- Part 2: required functions ----------
 
 def generate_question(difficulty: str, rng=None, law: str | None = None) -> InternalQuestion:
-    if difficulty not in {"easy", "medium", "hard"}:
+    if difficulty not in LEVEL_LAWS:
         raise ValueError("Difficulty must be easy, medium, or hard.")
     if law is not None and law not in _LAWS:
         raise ValueError(f"Unknown law: {law}")
     rng = rng or random.SystemRandom()
 
-    builder = _LAWS[law] if law else rng.choice(list(_LAWS.values()))
+    # Without an explicit law, the level decides which family is used.
+    builder = _LAWS[law or rng.choice(LEVEL_LAWS[difficulty])]
     draft = _generate_with_retry(builder, rng)
 
     correct_option_id = str(uuid4())

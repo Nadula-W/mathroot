@@ -108,7 +108,7 @@ def _fake_model(monkeypatch, payload, law):
     """Pretend the model replied with `payload`, and our code picked this law."""
     text = payload if isinstance(payload, str) else json.dumps(payload)
     monkeypatch.setattr(ai, "_call_ollama", lambda prompt, cfg: text)
-    monkeypatch.setattr(ai, "_pick_spec", lambda: SPECS[law])
+    monkeypatch.setattr(ai, "_pick_spec", lambda *args, **kwargs: SPECS[law])
 
 
 def test_good_product_question_is_accepted(configured, monkeypatch):
@@ -159,7 +159,7 @@ def test_model_cannot_slip_in_a_second_true_statement(configured, monkeypatch):
         {"text": "log_2 4 = 16", "misconception": "LOG_NUMBER_AND_RESULT_SWAPPED"},
     ]}
     monkeypatch.setattr(ai, "_call_ollama", lambda prompt, cfg: json.dumps(bad))
-    monkeypatch.setattr(ai, "_pick_spec", lambda: ("tolog", 2, 4, 16))
+    monkeypatch.setattr(ai, "_pick_spec", lambda *args, **kwargs: ("tolog", 2, 4, 16))
     with pytest.raises(ValueError):
         manual.validate_question(ai.generate_question("easy"))
 
@@ -349,7 +349,7 @@ def _capture_http_timeout(monkeypatch):
         return _FakeResponse()
 
     monkeypatch.setattr(ai.httpx, "post", fake_post)
-    monkeypatch.setattr(ai, "_pick_spec", lambda: SPECS["product"])
+    monkeypatch.setattr(ai, "_pick_spec", lambda *args, **kwargs: SPECS["product"])
     return captured
 
 
@@ -376,3 +376,46 @@ def test_generator_falls_back_when_the_model_times_out(configured, monkeypatch, 
         raise error
     monkeypatch.setattr(ai, "_call_ollama", too_slow)
     manual.validate_question(generator.generate_question("easy"))
+
+# ---------- difficulty levels in the AI path ----------
+
+LEVELS = ["easy", "medium", "hard"]
+
+
+def _family(question):
+    return manual._parse_source(question.source_expression)[0]
+
+
+@pytest.mark.parametrize("level", LEVELS)
+def test_ai_only_picks_families_of_the_level(level):
+    picked = {ai._pick_spec(level)[0] for _ in range(400)}
+    assert picked == set(manual.LEVEL_LAWS[level])
+
+
+def test_the_level_reaches_the_spec_picker_and_the_question(configured, monkeypatch):
+    seen = {}
+
+    def fake_pick(difficulty="easy"):
+        seen["level"] = difficulty
+        return SPECS["logpower"]
+
+    monkeypatch.setattr(ai, "_pick_spec", fake_pick)
+    monkeypatch.setattr(ai, "_call_ollama", lambda prompt, cfg: json.dumps(GOOD_LOGS["logpower"]))
+    question = ai.generate_question("hard")
+    assert seen["level"] == "hard"
+    assert question.difficulty == "hard"
+
+
+@pytest.mark.parametrize("level", LEVELS)
+def test_generator_keeps_the_level_when_it_falls_back(configured, monkeypatch, level):
+    def broken(prompt, cfg):
+        raise httpx.ConnectError("Ollama is not running")
+
+    monkeypatch.setattr(ai, "_call_ollama", broken)
+    families = set()
+    for _ in range(150):
+        question = generator.generate_question(level)
+        manual.validate_question(question)
+        assert question.difficulty == level
+        families.add(_family(question))
+    assert families <= set(manual.LEVEL_LAWS[level])
