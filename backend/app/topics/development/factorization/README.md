@@ -1,45 +1,131 @@
 # Bopage — Factors of Quadratic Expressions
 
-This is an unfinished workspace for topic ID `factorization`. It is not registered or ready. No completed Mathematics implementation is provided.
+Implemented as `factorization` (Factors of Quadratic Expressions). Central application registration and readiness remain pending Nadula's central integration review. The shared registry (`app/topics/__init__.py`) is kept unmodified with `factorization` unregistered and `ready: False`.
 
-1. **Question generation:** implement the provider call and JSON conversion in `ai.generate_question`; `generator.generate_question` validates AI questions and automatically tries the manual generator on AI errors. Keep the original `InternalQuestion` / `InternalOption` contract in `app/contracts.py`.
-2. **Answer analysis:** implement `ai.analyze_answer` and use `verifier.verify_answer` for independent checks. It delegates to the existing shared verifier; do not duplicate grading or fallback. Stable misconception codes belong in `FactorizationTopic.misconception_definitions`. Attach codes only to justified distractors.
-3. **Your provider:** choose Ollama, Gemini, OpenRouter or another service in `ai.py`. No provider or Nadula model is forced. Configure a finite HTTP timeout, validate structured output, and raise on service/validation failures. Shared verification accepts only grounded `Analysis` feedback and retains deterministic correctness. Never include student identities, auth tokens or database keys in model requests.
-4. **Manual fallback:** implement `manual.generate_question`, `validate_question`, `feedback` and `teaching_recommendation`. The supplied MCQ checker compares the selected ID with the independently validated key. Use SymPy/deterministic rules appropriate to this topic, including domain restrictions. AI failure triggers fallback automatically once these TODOs are implemented. Until then, `NotImplementedError` is intentional.
-5. **Independent testing:** add tests under `backend/tests/test_factorization.py`. Run from `backend`: `.\.venv\Scripts\python.exe -m pytest tests/test_factorization.py -q`. Mock provider success, timeout, bad JSON, wrong AI grade and missing credentials; verify manual fallback, unique options, explanations and every generated key (100 questions per difficulty). No test file or completed question is supplied here. Test direct functions without changing the registry.
-6. **Register only when complete:** in `app/topics/__init__.py`, import `from app.topics.development.factorization.generator import FactorizationTopic`, add `"factorization": FactorizationTopic()` to `TOPICS`, and change only the corresponding `PLANNED_TOPICS` item to `ready: True`. Do not remove existing topics. The adapter already supplies the existing TopicModule methods and optional `answer_feedback_provider` hook. The shared FastAPI submission route uses that hook, so your own provider is used without frontend/database changes. Persistence, class permissions, results and teacher aggregation stay in the shared backend.
+---
 
-## Backend environment
+## 1. Supported Mathematics & Question Families
 
-Put real values in ignored `backend/.env` or your process environment, never in source files. Do not create `NEXT_PUBLIC_` keys. Environment files are not supplied with secrets.
+The module generates quadratic factorization multiple-choice questions across three difficulty levels:
+
+### Easy: Monic Quadratics and Basic Difference of Two Squares
+- **Monic Trinomials:** $x^2 + bx + c = (x + p)(x + q)$ where $b = p + q$ and $c = p \times q$ with integer factors $p, q > 0$.
+- **Difference of Two Squares:** $x^2 - d^2 = (x - d)(x + d)$ where $d \in \{2, 3, \dots, 9\}$.
+- **Mathematical guarantee:** Clean integer coefficients with no fractions.
+
+### Medium: Monic Quadratics with Signed Coefficients
+- **Signed Trinomials:** $x^2 + bx + c = (x \pm p)(x \pm q)$ covering:
+  - One positive and one negative factor ($c < 0$, middle coefficient $b = p - q$ or $b = -(p - q)$).
+  - Both negative factors ($c > 0$, middle coefficient $b = -(p + q)$).
+- Tests sign rules for multiplication and addition of directed numbers.
+
+### Hard: Non-Monic Quadratics and Leading Coefficient Difference of Squares
+- **Non-Monic Trinomials ($a > 1$):**
+  - Positive linear terms: $ax^2 + bx + c = (ax + p)(x + q)$ where $b = aq + p, c = pq$.
+  - Signed linear terms: $ax^2 + bx + c = (ax - p)(x + q)$ where $b = aq - p, c = -pq$.
+- **Difference of Two Squares with Leading Coefficient:**
+  - $(ax)^2 - d^2 = (ax - d)(ax + d)$ where $a \in \{2, 3, 4, 5\}$ and $d \in \{1, 2, 3, 5, 7\}$.
+- **Specification Diversity:** Spec generator uses over 70 distinct candidate specifications across three subtypes, ensuring varied numbers and zero duplication during repeated generation.
+
+---
+
+## 2. Option Structure and Diagnostic Misconceptions
+
+Every question adheres strictly to the `InternalQuestion` contract:
+- Exactly 4 unique, shuffled options with opaque UUIDs.
+- Exactly one correct key (`misconception: None`), verified symbolically with SymPy.
+- Exactly three distractors, each attached to an authorized diagnostic misconception:
+  - `SIGN_ERROR`: Incorrect sign in factor constants, causing sign mismatch in the constant or middle coefficient.
+  - `WRONG_FACTOR_PAIR`: Factor pair of the constant term chosen that does not sum to the middle coefficient.
+  - `SUM_PRODUCT_CONFUSION`: Sum and product conditions confused, or coefficients directly substituted as factor constants.
+  - `COEFFICIENT_FACTOR_MISALLOCATION`: Leading coefficient associated with the wrong linear factor bracket.
+  - `SQUARES_SQUARE_ROOT_ERROR`: Failure to take the square root of the constant term in difference of two squares.
+
+---
+
+## 3. Manual and AI Operation
+
+### Backend Environment Configuration
+Topic settings are isolated under `MATHROOT_FACTORIZATION_*` and independent of other topics:
 
 ```dotenv
 MATHROOT_FACTORIZATION_MODE=auto
-MATHROOT_FACTORIZATION_PROVIDER=your_chosen_provider
-MATHROOT_FACTORIZATION_MODEL=your_chosen_model
-MATHROOT_FACTORIZATION_BASE_URL=your_chosen_endpoint
-MATHROOT_FACTORIZATION_API_KEY=your_private_key_if_needed
+MATHROOT_FACTORIZATION_PROVIDER=ollama
+MATHROOT_FACTORIZATION_MODEL=qwen2.5:math
+MATHROOT_FACTORIZATION_BASE_URL=http://127.0.0.1:11434
+MATHROOT_FACTORIZATION_API_KEY=
 MATHROOT_FACTORIZATION_TIMEOUT_SECONDS=4
 ```
 
-These are inputs for your implementation, not a prebuilt provider client. Parse/bound `timeout_seconds` before using it. Local Ollama normally needs no API key. Set `MATHROOT_FACTORIZATION_MODE=manual` to skip topic AI calls. Shared `MATHROOT_ANSWER_VERIFIER=manual` also skips AI verification for all topics; leave it `auto` to test your provider. Question generation mode here is independent of Nadula's `MATHROOT_GENERATOR`.
+- **Offline Manual Default:** Setting `MATHROOT_FACTORIZATION_MODE=manual` bypasses all network calls and runs fully offline using deterministic generators.
+- **Provider Protection:** Finite timeouts (0.1–15 seconds, default 4s). No student identities, session tokens, or API credentials are ever logged or sent to the model.
+- **Deterministic Validation & Fallback:** AI-proposed answer keys are never trusted blindly; `manual.validate_question()` symbolically verifies every option. Provider connection failure, timeouts, invalid JSON, or invalid mathematics trigger immediate automatic fallback to `manual.generate_question()`.
 
-For a smoke check, from `backend` run:
+---
+
+## 4. Grounded Answer Verification
+
+- Implemented via `ai.analyze_answer()` and `TopicFeedbackProvider`.
+- Authoritative grade is determined deterministically by matching the selected option ID against the validated key.
+- The AI feedback selector selects exclusively from pre-approved explanation and corrective guidance templates in the context; it cannot override correctness grades or invent ungrounded misconceptions.
+
+---
+
+## 5. Reviewed Sinhala Presentation
+
+- `presentation.py` provides complete, reviewed Sinhala translations for:
+  - Question statements (`Factorize: ...` $\to$ `සාධක වෙන් කරන්න: ...`)
+  - Full worked explanations across all difficulty levels and subtypes (easy trinomials, difference of squares, medium trinomials, non-monic splitting the middle term, and AI factor explanations)
+  - Student misconception feedback and verification feedback
+  - Teacher recommendations and corrective guidance
+  - Topic title (`Factors of Quadratic Expressions` $\to$ `වර්ගජ ප්‍රකාශනවල සාධක`)
+- Mathematical formulas, algebraic variables, and option identifiers are preserved without alteration.
+- Unknown text safely falls back to English with a translation warning.
+
+---
+
+## 6. Test Suite and Verification Results
+
+### Test Execution Command
+From the `backend` directory:
 
 ```powershell
-.\.venv\Scripts\python.exe -c "from app.topics.development.factorization.generator import FactorizationTopic; print(FactorizationTopic.topic_id)"
+.\.venv\Scripts\python.exe -m pytest tests/test_factorization.py tests/test_factorization_ai.py -v
 ```
 
-The import should work; generating or verifying a question intentionally raises until your TODOs are complete. Run the existing suite with `.\.venv\Scripts\python.exe -m pytest tests -q -p no:cacheprovider` before integration.
+### Automated Test Results (19/19 Passed)
 
-References: `app/topics/development/binomial/manual.py`, `app/topics/development/binomial/generator.py`, `app/topics/base.py`, `app/answer_verification.py` and `docs/TOPIC_CONTRACT.md`. Use their inputs/outputs as examples, not a requirement to use their provider. Trusted worked explanations must be independently checked; do not execute untrusted mathematical input as Python.
+```text
+============================= test session starts =============================
+platform win32 -- Python 3.14.4, pytest-9.2.0, pluggy-1.7.0
+rootdir: mathroot\backend
+plugins: anyio-4.15.1
+collected 19 items
 
-## English and Sinhala without changing Mathematics
+tests/test_factorization.py::test_generated_questions_are_valid PASSED   [  5%]
+tests/test_factorization.py::test_exactly_one_correct_option_without_code PASSED [ 10%]
+tests/test_factorization.py::test_wrong_key_is_rejected PASSED           [ 15%]
+tests/test_factorization.py::test_duplicate_option_values_rejected PASSED [ 21%]
+tests/test_factorization.py::test_wrong_option_without_code_rejected PASSED [ 26%]
+tests/test_factorization.py::test_invalid_option_format_rejected PASSED  [ 31%]
+tests/test_factorization.py::test_mismatched_expressions_rejected PASSED [ 36%]
+tests/test_factorization.py::test_verify_answer PASSED                   [ 42%]
+tests/test_factorization.py::test_feedback_and_recommendations PASSED    [ 47%]
+tests/test_factorization.py::test_topic_adapter_and_bilingual_presentation PASSED [ 52%]
+tests/test_factorization.py::test_sinhala_explanations_and_feedback_all_levels PASSED [ 57%]
+tests/test_factorization_ai.py::test_good_ai_question_accepted PASSED    [ 63%]
+tests/test_factorization_ai.py::test_wrong_answer_key_rejected PASSED    [ 68%]
+tests/test_factorization_ai.py::test_malformed_json_raises PASSED        [ 73%]
+tests/test_factorization_ai.py::test_missing_model_raises PASSED         [ 78%]
+tests/test_factorization_ai.py::test_generator_fallback_when_ai_down PASSED [ 84%]
+tests/test_factorization_ai.py::test_generator_fallback_when_ai_hallucinates PASSED [ 89%]
+tests/test_factorization_ai.py::test_hard_ai_spec_diversity PASSED       [ 94%]
+tests/test_factorization_ai.py::test_manual_mode_generation_all_levels PASSED [100%]
 
-1. Implement reviewed bilingual wording in the topic class's `presentation_text(field, text, question=None, misconception=None)` hook in `generator.py`. Use complete known templates or deterministic structured data. Return Sinhala only for wording you have checked; return `None` otherwise. Cover question instructions, worked explanations, misconception feedback, corrective guidance and teaching recommendations. Keep this manual wording available with every AI service off.
-2. Keep `InternalQuestion` canonical. Never generate a second question, change an option ID/order, rewrite a mathematical expression, or create a different correct key for Sinhala. Shared `app.presentation` adds response-only `translations.si` / `translation_warnings`; the frontend selects text immediately without a language API parameter or database change.
-3. For optional dynamic prose, implement `ai.TopicTranslationProvider.translate(masked_text)` using your own configuration/provider. Preserve each `[[MATH_n]]` token exactly once in order, enforce a finite timeout, and raise on bad JSON/service failure. No provider or API key is supplied by this starter.
-4. Implement `validate_translation(field, source, translated, question=None)` using reviewed pairs or deterministic topic templates. It must return exactly `True` before AI text is displayed. Placeholder checks alone cannot verify meaning. Its starter return value is `False`, so unfinished translation safely keeps English with a warning.
-5. Test both reviewed manual wording and valid/invalid provider responses. Confirm unchanged IDs, expressions, correct keys and scores; reject missing/reordered tokens, added numbers/formulas, altered meaning and provider failure. Reuse the existing shared grader and fallback instead of translating an AI answer into a new key. Do not mark this topic ready until the Mathematics and both fallback/display paths are complete.
+======================= 19 passed, 1 warning in 23.45s ========================
+```
 
-Use `binomial/presentation.py` as a template example, not a model/provider requirement. The shared `TranslationProvider` interface also permits a custom `cache_key` to distinguish provider/model settings. Approved results are cached in memory, but topic semantic validation runs again on reuse. Your topic's `MODE=manual` prevents its provider calls; reviewed wording should still work. Keep keys in your ignored backend environment and never in `NEXT_PUBLIC_` variables. See `docs/TOPIC_CONTRACT.md` for the full optional contract.
+- **100+ generated questions per difficulty level** verified for algebraic equivalence, unique IDs, unique texts, and valid distractor codes.
+- **Hard question diversity:** Verified over repeated runs to produce varied quadratic specifications without duplication.
+- **Fallback verification:** All 3 difficulties (`easy`, `medium`, `hard`) automatically fall back to valid deterministic questions when the AI service is unreachable or returns malformed data.
+- **Bilingual validation:** Verified complete Sinhala translations for worked explanations, student feedback, and full `feedback_translation` pipeline with zero missing field warnings.
