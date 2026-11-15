@@ -14,8 +14,7 @@ def verify_answer(question: InternalQuestion, option_id: str) -> dict:
     return shared_verify_answer(question, option_id, EquationsTopic())
 
 
-# TODO: Define diagnostic codes in EquationsTopic.misconception_definitions,
-# attach them to evidence-bearing distractors in your generators, and implement
-# feedback/teaching actions in manual.py. Do not invent diagnoses from no evidence.
+# Diagnostic codes and trusted feedback are defined in manual.py and exposed
+# through EquationsTopic. A single choice supplies a signal, not a proven diagnosis.
 # For future free-text input, use a bounded safe mathematical parser and explicit
 # domain rules. Keep current MCQ request/response contracts unchanged.

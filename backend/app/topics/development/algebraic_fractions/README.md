@@ -1,45 +1,118 @@
 # Fernando — Algebraic Fractions
 
-This is an unfinished workspace for topic ID `algebraic_fractions`. It is not registered or ready. No completed Mathematics implementation is provided.
+This is the implementation of the `algebraic_fractions` module, covering question generation, validation, feedback, teaching recommendations, grounded answer analysis, reviewed Sinhala presentation, and remediation helpers.
 
-1. **Question generation:** implement the provider call and JSON conversion in `ai.generate_question`; `generator.generate_question` validates AI questions and automatically tries the manual generator on AI errors. Keep the original `InternalQuestion` / `InternalOption` contract in `app/contracts.py`.
-2. **Answer analysis:** implement `ai.analyze_answer` and use `verifier.verify_answer` for independent checks. It delegates to the existing shared verifier; do not duplicate grading or fallback. Stable misconception codes belong in `AlgebraicFractionsTopic.misconception_definitions`. Attach codes only to justified distractors.
-3. **Your provider:** choose Ollama, Gemini, OpenRouter or another service in `ai.py`. No provider or Nadula model is forced. Configure a finite HTTP timeout, validate structured output, and raise on service/validation failures. Shared verification accepts only grounded `Analysis` feedback and retains deterministic correctness. Never include student identities, auth tokens or database keys in model requests.
-4. **Manual fallback:** implement `manual.generate_question`, `validate_question`, `feedback` and `teaching_recommendation`. The supplied MCQ checker compares the selected ID with the independently validated key. Use SymPy/deterministic rules appropriate to this topic, including domain restrictions. AI failure triggers fallback automatically once these TODOs are implemented. Until then, `NotImplementedError` is intentional.
-5. **Independent testing:** add tests under `backend/tests/test_algebraic_fractions.py`. Run from `backend`: `.\.venv\Scripts\python.exe -m pytest tests/test_algebraic_fractions.py -q`. Mock provider success, timeout, bad JSON, wrong AI grade and missing credentials; verify manual fallback, unique options, explanations and every generated key (100 questions per difficulty). No test file or completed question is supplied here. Test direct functions without changing the registry.
-6. **Register only when complete:** in `app/topics/__init__.py`, import `from app.topics.development.algebraic_fractions.generator import AlgebraicFractionsTopic`, add `"algebraic_fractions": AlgebraicFractionsTopic()` to `TOPICS`, and change only the corresponding `PLANNED_TOPICS` item to `ready: True`. Do not remove existing topics. The adapter already supplies the existing TopicModule methods and optional `answer_feedback_provider` hook. The shared FastAPI submission route uses that hook, so your own provider is used without frontend/database changes. Persistence, class permissions, results and teacher aggregation stay in the shared backend.
+---
 
-## Backend environment
+## 1. Supported Question Families and Domain Restrictions
 
-Put real values in ignored `backend/.env` or your process environment, never in source files. Do not create `NEXT_PUBLIC_` keys. Environment files are not supplied with secrets.
+The topic implements three difficulty levels using bounded algebraic fraction families:
+
+### Easy: Monomial Like-Denominator Addition
+- **Expression form:**
+  $$\frac{a}{x} + \frac{b}{x} = \frac{a+b}{x}$$
+- **Parameters:** Integers $a, b$ satisfying $1 \le b < a \le 9$ and $a \neq 3b$.
+  - The condition $a \neq 3b$ prevents the distractor $\frac{a-b}{x}$ from algebraically colliding with other options.
+- **Domain restriction:** $x \neq 0$, explicitly stated in the statement and explanation (`where x != 0`).
+- **Parameter space:** Exactly **33 valid distinct $(a, b)$ pairs**.
+
+### Medium: Monomial Unlike-Denominator Subtraction
+- **Expression form:**
+  $$\frac{a}{x} - \frac{b}{kx} = \frac{ka - b}{kx}$$
+- **Parameters:** Integers $k, a, b$ satisfying $2 \le k \le 4$ and $1 \le b < a \le 6$.
+- **Domain restriction:** $x \neq 0$, explicitly stated in the statement and explanation (`where x != 0`).
+- **Parameter space:** Exactly **45 valid distinct $(a, b, k)$ triples**.
+
+### Hard: Binomial Linear Denominator Subtraction
+- **Expression form:**
+  $$\frac{a}{x+b} - \frac{c}{x+d} = \frac{(a-c)x + (ad - cb)}{(x+b)(x+d)}$$
+- **Parameters:** Integers $a, b, c, d$ satisfying $1 \le b < d \le 6$ and $1 \le c < a \le 5$.
+- **Domain restrictions:** $x \neq -b$ and $x \neq -d$, explicitly stated in the statement and explanation (`where x != -b and x != -d`).
+- **Parameter space:** Exactly **150 valid distinct $(a, b, c, d)$ 4-tuples**.
+
+---
+
+## 2. Option Structure and Diagnostic Misconceptions
+
+Every generated question strictly satisfies the topic contracts:
+- **Option count:** Exactly four options per question.
+- **Correct key:** Exactly one correct option matching `correct_expression`, validated symbolically with SymPy.
+- **Pairwise distinctness:** All options are mathematically non-equivalent and checked for domain equivalence.
+- **Distractors:** Exactly three distractors per question, each assigned a justified topic diagnostic code:
+  - `DENOMINATOR_ADDITION`: Adding denominators directly across fractions (e.g., $\frac{a}{x} + \frac{b}{x} \to \frac{a+b}{2x}$).
+  - `UNSCALED_NUMERATOR`: Converting to a common denominator without scaling the numerator.
+  - `SIGN_ERROR`: Sign confusion when adding or subtracting numerators.
+  - `SIGN_DISTRIBUTION_ERROR`: Failing to distribute the negative sign across a binomial numerator during subtraction.
+  - `NUMERATOR_OPERATION_CONFUSION`: Multiplying numerators instead of combining via addition/subtraction.
+
+---
+
+## 3. Manual and AI Configuration
+
+Configuration is managed in `ai.py` and read from environment variables. Real credentials or endpoints must never be committed; use the following placeholder structure:
 
 ```dotenv
 MATHROOT_ALGEBRAIC_FRACTIONS_MODE=auto
-MATHROOT_ALGEBRAIC_FRACTIONS_PROVIDER=your_chosen_provider
-MATHROOT_ALGEBRAIC_FRACTIONS_MODEL=your_chosen_model
-MATHROOT_ALGEBRAIC_FRACTIONS_BASE_URL=your_chosen_endpoint
+MATHROOT_ALGEBRAIC_FRACTIONS_PROVIDER=ollama
+MATHROOT_ALGEBRAIC_FRACTIONS_MODEL=qwen2.5:math
+MATHROOT_ALGEBRAIC_FRACTIONS_BASE_URL=http://localhost:11434
 MATHROOT_ALGEBRAIC_FRACTIONS_API_KEY=your_private_key_if_needed
 MATHROOT_ALGEBRAIC_FRACTIONS_TIMEOUT_SECONDS=4
 ```
 
-These are inputs for your implementation, not a prebuilt provider client. Parse/bound `timeout_seconds` before using it. Local Ollama normally needs no API key. Set `MATHROOT_ALGEBRAIC_FRACTIONS_MODE=manual` to skip topic AI calls. Shared `MATHROOT_ANSWER_VERIFIER=manual` also skips AI verification for all topics; leave it `auto` to test your provider. Question generation mode here is independent of Nadula's `MATHROOT_GENERATOR`.
+- **Mode:** Setting `MATHROOT_ALGEBRAIC_FRACTIONS_MODE=manual` bypasses all model calls and uses deterministic generators directly.
+- **Timeouts:** Bounded by `timeout_seconds` (finite timeout between 0.1 and 60 seconds, default 4).
+- **AI Question Generation:** In AI mode, the model produces only integer parameters (`a`, `b`, etc.). Python validates the parameters against family rules. All expressions, options, and explanations are assembled locally from verified deterministic templates.
+- **Automatic Fallback:** Provider timeouts, connection errors, invalid JSON schemas, or out-of-range parameters raise exceptions caught by `generator.py`, which seamlessly falls back to deterministic manual question generation.
 
-For a smoke check, from `backend` run:
+---
+
+## 4. Grounded Answer Verification
+
+- Implemented via `ai.analyze_answer()` and `TopicFeedbackProvider`.
+- The AI selects exclusively from approved explanations and teaching recommendations passed in the context.
+- The model cannot decide correctness grades, alter deterministic MCQ outcomes, or invent ungrounded misconceptions.
+- Any model failure, timeout, contradictory proposed grade, or unsupported diagnostic code immediately reverts to trusted deterministic rule-based feedback.
+
+---
+
+## 5. Reviewed Sinhala Presentation and English Fallback
+
+- The presentation hook `presentation_text` in `presentation.py` provides reviewed Sinhala templates for question statements, worked steps, student feedback, corrective tips, and teacher guidance across all three difficulties.
+- Mathematical expressions, numbers, and variables remain untouched.
+- Any unrecognized text returns `None`, allowing the presentation layer to keep the original English text and flag a translation warning.
+- `validate_translation` returns `True` strictly for reviewed, approved topic wording.
+- The optional dynamic translation hook returns `None` so that static reviewed templates are used reliably without exposing an unfinished dynamic provider.
+
+---
+
+## 6. Remediation Helpers and Scope Status
+
+The module provides deterministic remediation algorithms to support repeated practice on misconceptions:
+- `get_all_valid_parameters(difficulty)`: Enumerates all valid parameter sets for each difficulty.
+- `extract_question_parameters(question)`: Bidirectionally parses parameter values from questions.
+- `build_question_from_parameters(difficulty, params)`: Reconstructs validated questions from parameter tuples.
+- `generate_remediation_variation(difficulty, exclude_params)`: Generates an unseen variation from the same question family, excluding previously attempted parameters.
+- `ParameterSpaceExhaustedError`: Raised gracefully when all combinations in a family have been attempted.
+- `generate_remediation_question(difficulty, exclude_params)`: Tries AI parameter generation, rejects parameter collisions, and falls back to manual unseen variations.
+
+> [!NOTE]
+> **Scope Notice:** Remediation helper functions and parameter deduplication algorithms are fully implemented in this module. However, shared HTTP routes (`POST /api/tests/{test_id}/answers/submit`), persistence in `mathroot_answers.verification`, and student UI rendering are part of the shared assessment system owned by Nadula and remain pending integration. Do not claim the complete end-to-end student remediation workflow is live.
+
+---
+
+## 7. Test Commands
+
+Run the topic test suite from the `backend` directory:
 
 ```powershell
-.\.venv\Scripts\python.exe -c "from app.topics.development.algebraic_fractions.generator import AlgebraicFractionsTopic; print(AlgebraicFractionsTopic.topic_id)"
+.\.venv\Scripts\python.exe -m pytest tests/test_algebraic_fractions.py -q -p no:cacheprovider
 ```
 
-The import should work; generating or verifying a question intentionally raises until your TODOs are complete. Run the existing suite with `.\.venv\Scripts\python.exe -m pytest tests -q -p no:cacheprovider` before integration.
+---
 
-References: `app/topics/development/binomial/manual.py`, `app/topics/development/binomial/generator.py`, `app/topics/base.py`, `app/answer_verification.py` and `docs/TOPIC_CONTRACT.md`. Use their inputs/outputs as examples, not a requirement to use their provider. Trusted worked explanations must be independently checked; do not execute untrusted mathematical input as Python.
+## 8. Unsupported and Incomplete Features
 
-## English and Sinhala without changing Mathematics
-
-1. Implement reviewed bilingual wording in the topic class's `presentation_text(field, text, question=None, misconception=None)` hook in `generator.py`. Use complete known templates or deterministic structured data. Return Sinhala only for wording you have checked; return `None` otherwise. Cover question instructions, worked explanations, misconception feedback, corrective guidance and teaching recommendations. Keep this manual wording available with every AI service off.
-2. Keep `InternalQuestion` canonical. Never generate a second question, change an option ID/order, rewrite a mathematical expression, or create a different correct key for Sinhala. Shared `app.presentation` adds response-only `translations.si` / `translation_warnings`; the frontend selects text immediately without a language API parameter or database change.
-3. For optional dynamic prose, implement `ai.TopicTranslationProvider.translate(masked_text)` using your own configuration/provider. Preserve each `[[MATH_n]]` token exactly once in order, enforce a finite timeout, and raise on bad JSON/service failure. No provider or API key is supplied by this starter.
-4. Implement `validate_translation(field, source, translated, question=None)` using reviewed pairs or deterministic topic templates. It must return exactly `True` before AI text is displayed. Placeholder checks alone cannot verify meaning. Its starter return value is `False`, so unfinished translation safely keeps English with a warning.
-5. Test both reviewed manual wording and valid/invalid provider responses. Confirm unchanged IDs, expressions, correct keys and scores; reject missing/reordered tokens, added numbers/formulas, altered meaning and provider failure. Reuse the existing shared grader and fallback instead of translating an AI answer into a new key. Do not mark this topic ready until the Mathematics and both fallback/display paths are complete.
-
-Use `binomial/presentation.py` as a template example, not a model/provider requirement. The shared `TranslationProvider` interface also permits a custom `cache_key` to distinguish provider/model settings. Approved results are cached in memory, but topic semantic validation runs again on reuse. Your topic's `MODE=manual` prevents its provider calls; reviewed wording should still work. Keep keys in your ignored backend environment and never in `NEXT_PUBLIC_` variables. See `docs/TOPIC_CONTRACT.md` for the full optional contract.
+- **Topic Registration:** Registration in `backend/app/topics/__init__.py` and `PLANNED_TOPICS` (`ready: True`) is pending until Nadula performs registration.
+- **Dynamic Translation Provider:** Dynamic AI translation is disabled; reviewed static templates are used.
+- **End-to-End Route Remediation:** Multi-turn practice routes and state persistence belong to the shared assessment layer.
